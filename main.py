@@ -11,10 +11,10 @@ from aiogram.filters import Command, CommandStart
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # ID вашей группы (формат может быть отрицательный, типа -1001234567890)
-GROUP_ID = -1001234567890
+GROUP_ID = -4975865911
 
 # список ID админов
-ADMINS = {123456789, 987654321}
+ADMINS = {8311893594, 987654321}
 
 # глобально храним последний курс
 last_rate: float | None = None
