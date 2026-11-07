@@ -42,11 +42,15 @@ public final class MoveUtil {
         }
     }
 
+    /** True once the aura has rewritten the movement keys (only then they have to be given back). */
+    private static boolean keysTouched;
+
     public static void restoreMovementKeys() {
         Minecraft mc = mc();
-        if (mc.options == null) {
+        if (mc.options == null || !keysTouched) {
             return;
         }
+        keysTouched = false;
         mc.options.keyUp.setDown(physicallyDown(mc.options.keyUp));
         mc.options.keyDown.setDown(physicallyDown(mc.options.keyDown));
         mc.options.keyLeft.setDown(physicallyDown(mc.options.keyLeft));
@@ -116,6 +120,7 @@ public final class MoveUtil {
             }
         }
 
+        keysTouched = true;
         mc.options.keyUp.setDown(closestForward > 0.0F);
         mc.options.keyDown.setDown(closestForward < 0.0F);
         mc.options.keyLeft.setDown(closestStrafe > 0.0F);
@@ -136,5 +141,20 @@ public final class MoveUtil {
             newStrafe = newStrafe / currentMag * maxMag;
         }
         return new float[]{newForward, newStrafe};
+    }
+
+    /**
+     * Free movement without touching the keys: the pressed keys describe a direction relative to the camera (cameraYaw),
+     * while the player's body looks along playerYaw; the result is the same world direction in the body's own terms.
+     * Input and output are {forward, left} impulses as the vanilla input uses them.
+     */
+    public static float[] reproject(float forward, float left, float cameraYaw, float playerYaw) {
+        double camera = Math.toRadians(cameraYaw);
+        double body = Math.toRadians(playerYaw);
+        double worldX = forward * -Math.sin(camera) + left * Math.cos(camera);
+        double worldZ = forward * Math.cos(camera) + left * Math.sin(camera);
+        float newForward = (float) (worldX * -Math.sin(body) + worldZ * Math.cos(body));
+        float newLeft = (float) (worldX * Math.cos(body) + worldZ * Math.sin(body));
+        return new float[]{newForward, newLeft};
     }
 }
