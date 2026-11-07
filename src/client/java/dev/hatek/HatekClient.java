@@ -10,7 +10,10 @@ import dev.hatek.client.module.impl.misc.VoiceControl;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.minecraft.resources.Identifier;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
@@ -34,6 +37,15 @@ public class HatekClient implements ClientModInitializer {
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_RIGHT_SHIFT,
                 KeyMapping.Category.MISC));
+
+        HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
+                Identifier.fromNamespaceAndPath(MOD_ID, "target_esp"),
+                (graphics, delta) -> {
+                    dev.hatek.client.module.impl.render.TargetEsp esp = dev.hatek.client.module.impl.render.TargetEsp.instance();
+                    if (esp != null) {
+                        esp.render(graphics, delta);
+                    }
+                });
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);

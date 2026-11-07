@@ -20,6 +20,8 @@ public class MultiPlayerGameModeMixin {
     private void hatek$onAttack(Player player, Entity target, CallbackInfo ci) {
         if (!Attack.allowAttack()) {
             ci.cancel();
+            return;
         }
+        dev.hatek.client.render.TargetTracker.onAttack(target);
     }
 }

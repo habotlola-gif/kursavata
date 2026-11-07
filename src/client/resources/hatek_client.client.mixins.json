@@ -7,6 +7,7 @@
     "CameraMixin",
     "ConnectionMixin",
     "ItemInHandRendererMixin",
+    "LevelRendererMixin",
     "LivingEntityMixin",
     "LocalPlayerMixin",
     "MouseHandlerMixin",
