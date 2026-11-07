@@ -105,7 +105,7 @@ public class HatekClient implements ClientModInitializer {
         Set<Integer> down = new HashSet<>();
         for (Module module : ModuleManager.all()) {
             int key = module.keyCode();
-            if (key != GLFW.GLFW_KEY_UNKNOWN && InputConstants.isKeyDown(mc.getWindow(), key)) {
+            if (key != GLFW.GLFW_KEY_UNKNOWN && Module.isBindDown(key)) {
                 down.add(key);
             }
         }

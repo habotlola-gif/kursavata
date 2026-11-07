@@ -4,7 +4,6 @@ import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.impl.movement.DragonFly;
 import dev.hatek.client.module.setting.BoolSetting;
-import dev.hatek.client.module.setting.KeySetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -22,16 +21,16 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Locale;
 
 /**
- * SuperSpear: one key (a keyboard key or a side mouse button, e.g. MOUSE 4). Press it and the module marks the player
- * nearest to your crosshair, takes a spear and charges it (the spear only starts to hurt after its charge delay), then
- * rushes through the mark at high speed and checks in the chat whether the server registered the hit.
+ * SuperSpear: turn the module on (its own key, a keyboard key or a side mouse button such as MOUSE 4), then click the
+ * left mouse button with a spear in hand while aiming near a player. The module marks the player nearest to your
+ * crosshair, charges the spear (it only starts to hurt after its charge delay), then rushes through the mark at high
+ * speed and checks in the chat whether the server registered the hit.
  *
  *   SuperSpear: Метка: ник. Подготовка удара.
  *   SuperSpear: Попадание подтверждено сервером; метка снята.
  *
  * The rush speeds up every tick (DragonFly's Speed counts if it is higher), keeps the aim on the target and lands its
  * last step exactly in the target's middle before passing through, so the server sees you inside the target.
- * Pressing the key again cancels the strike.
  */
 public final class SuperSpear extends Module {
     private static final int PASS_TICKS = 4;
@@ -41,7 +40,7 @@ public final class SuperSpear extends Module {
 
     private static SuperSpear instance;
 
-    private final KeySetting strikeKey = new KeySetting("Strike key (MOUSE 4 works)", -1);
+    private final BoolSetting onlyWithSpear = new BoolSetting("Only with a spear in hand", true);
     private final SliderSetting speed = new SliderSetting("Top speed (blocks/tick)", 4.0, 0.5, 8.0, 0.1);
     private final SliderSetting acceleration = new SliderSetting("Acceleration (blocks/tick per tick)", 0.6, 0.05, 3.0, 0.05);
     private final SliderSetting range = new SliderSetting("Range (blocks)", 100.0, 10.0, 150.0, 1.0);
@@ -62,9 +61,9 @@ public final class SuperSpear extends Module {
     private boolean active;          // true on a tick where the module steers the player
 
     public SuperSpear() {
-        super("SuperSpear", "One key: mark the target, charge the spear, rush through it", Category.COMBAT);
+        super("SuperSpear", "Left click aimed at a player: mark, charge the spear, rush through", Category.COMBAT);
         instance = this;
-        with(this.strikeKey, this.speed, this.acceleration, this.range, this.cone, this.useDragonFly,
+        with(this.onlyWithSpear, this.speed, this.acceleration, this.range, this.cone, this.useDragonFly,
                 this.stabOnContact, this.stopAfter);
     }
 
@@ -121,8 +120,9 @@ public final class SuperSpear extends Module {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
-        boolean down = this.strikeKey.isDown();
-        boolean pressed = down && !this.keyWas;
+        // the trigger is a left click (attack) with the module on, aimed near a player
+        boolean down = mc.options.keyAttack.isDown();
+        boolean pressed = down && !this.keyWas && mc.gui.screen() == null;
         this.keyWas = down;
 
         if (mc.gameMode == null || mc.level == null || !player.isAlive() || mc.gui.screen() != null) {
@@ -131,11 +131,8 @@ public final class SuperSpear extends Module {
             }
             return;
         }
-        if (pressed) {
-            if (this.phase != Phase.IDLE) {
-                abort(true);
-                return;
-            }
+        if (pressed && this.phase == Phase.IDLE
+                && (!this.onlyWithSpear.value() || player.getMainHandItem().is(ItemTags.SPEARS))) {
             start(player);
             return;
         }

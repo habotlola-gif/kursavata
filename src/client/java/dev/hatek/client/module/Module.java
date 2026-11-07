@@ -25,7 +25,11 @@ public class Module {
     private boolean enabled;
     private boolean expanded;
     private int keyCode = GLFW.GLFW_KEY_UNKNOWN;
+    /** Mouse buttons used as keys are stored as MOUSE_BASE - button (button 3, "mouse 4", is -103). */
+    public static final int MOUSE_BASE = -100;
+
     private boolean binding;
+    private final boolean[] mouseWas = new boolean[8];
 
     private final Anim toggleAnim = new Anim(0.0f, 16.0f);
     private final Anim expandAnim = new Anim(0.0f, 13.0f);
@@ -194,6 +198,7 @@ public class Module {
     }
 
     private void renderBadge(GuiGraphicsExtractor gg, float x, float y, double mx, double my) {
+        pollMouseBinding();
         float bx = x + Style.BADGE_X;
         float by = y + Style.BADGE_Y;
         this.badgeAnim.to(this.binding
@@ -229,9 +234,34 @@ public class Module {
                 Style.KNOB, hover ? Style.WHITE : Style.white(0.94f));
     }
 
+    /** True when the bound key is down right now (a keyboard key or a mouse button). */
+    public static boolean isBindDown(int key) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (key <= MOUSE_BASE) {
+            return GLFW.glfwGetMouseButton(mc.getWindow().handle(), MOUSE_BASE - key) == GLFW.GLFW_PRESS;
+        }
+        return key != GLFW.GLFW_KEY_UNKNOWN && InputConstants.isKeyDown(mc.getWindow(), key);
+    }
+
+    /** While waiting for a key, a middle or side mouse button can be the bind too. */
+    private void pollMouseBinding() {
+        long window = net.minecraft.client.Minecraft.getInstance().getWindow().handle();
+        for (int button = 2; button < this.mouseWas.length; button++) {
+            boolean down = GLFW.glfwGetMouseButton(window, button) == GLFW.GLFW_PRESS;
+            if (this.binding && down && !this.mouseWas[button]) {
+                this.keyCode = MOUSE_BASE - button;
+                this.binding = false;
+            }
+            this.mouseWas[button] = down;
+        }
+    }
+
     public String keyLabel() {
         if (this.keyCode == GLFW.GLFW_KEY_UNKNOWN) {
             return "-";
+        }
+        if (this.keyCode <= MOUSE_BASE) {
+            return "M" + (MOUSE_BASE - this.keyCode + 1);
         }
         String name = InputConstants.Type.KEYSYM.getOrCreate(this.keyCode).getDisplayName().getString();
         return name.length() > 3 ? name.substring(0, 3).toUpperCase(Locale.ROOT)

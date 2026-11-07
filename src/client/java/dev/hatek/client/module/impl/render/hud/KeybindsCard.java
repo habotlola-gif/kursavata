@@ -54,13 +54,14 @@ public final class KeybindsCard extends HudCard<KeybindsCard.Bind> {
         List<Bind> out = new ArrayList<>();
         for (Module module : ModuleManager.all()) {
             int key = module.keyCode();
-            if (key == GLFW.GLFW_KEY_UNKNOWN || key < 0 || module == this.owner) {
+            if (key == GLFW.GLFW_KEY_UNKNOWN || (key < 0 && key > Module.MOUSE_BASE) || module == this.owner) {
                 continue;
             }
             if (onlyEnabled && !module.isEnabled()) {
                 continue;
             }
-            String label = InputConstants.Type.KEYSYM.getOrCreate(key).getDisplayName().getString().toUpperCase(Locale.ROOT);
+            String label = key <= Module.MOUSE_BASE ? "MOUSE " + (Module.MOUSE_BASE - key + 1)
+                    : InputConstants.Type.KEYSYM.getOrCreate(key).getDisplayName().getString().toUpperCase(Locale.ROOT);
             out.add(new Bind(spaced(module.name()), label, module.isEnabled()));
             if (out.size() >= MAX_ROWS) {
                 break;
