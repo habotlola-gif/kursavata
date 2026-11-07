@@ -63,6 +63,7 @@ public final class ComponentManager extends HashMap<Class<? extends Component>, 
             process.onRender3D();
         }
         SpaceTime.onFrame();
+        SmoothRotation.onFrame();
     }
 
     public static void packetSent(Packet<?> packet) {

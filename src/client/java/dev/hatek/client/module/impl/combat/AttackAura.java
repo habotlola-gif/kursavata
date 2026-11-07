@@ -6,6 +6,7 @@ import dev.hatek.client.module.impl.combat.aura.Attack;
 import dev.hatek.client.module.impl.combat.aura.rotation.ComponentManager;
 import dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
+import dev.hatek.client.module.impl.combat.aura.rotation.SmoothRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
 import dev.hatek.client.module.impl.combat.aura.util.AuraRandom;
@@ -45,6 +46,9 @@ public final class AttackAura extends Module {
 
     public static final String MOVE_FREE = "Free";
 
+    public static final String ROT_UNIVERSAL = "Universal Aura";
+    public static final String ROT_SMOOTH = "Smooth Rotation";
+
     public static final String SPACE_TIME = "SpaceTime";
 
     public static final String LEGIT_SPRINT = "Legit Sprint";
@@ -69,6 +73,16 @@ public final class AttackAura extends Module {
 
     private final ModeSetting movementType =
             new ModeSetting("Movement", 0, MOVE_DEFAULT, MOVE_FREE);
+    private final ModeSetting rotationMode =
+            new ModeSetting("Rotation", 0, ROT_UNIVERSAL, ROT_SMOOTH);
+    private final SliderSetting smoothSpeed = new SliderSetting("Smooth: aim speed", 1.0, 0.4, 2.5, 0.1);
+    private final SliderSetting smoothJerk = new SliderSetting("Smooth: jerk (speed bursts, %)", 65.0, 0.0, 100.0, 5.0);
+    private final ModeSetting smoothPattern = new ModeSetting("Smooth: multipoint pattern", 0,
+            SmoothRotation.NORMAL, SmoothRotation.SWAP, SmoothRotation.CIRCLE, SmoothRotation.FIGURE_8,
+            SmoothRotation.ZIGZAG, SmoothRotation.RANDOM);
+    private final SliderSetting smoothPatternSpeed = new SliderSetting("Smooth: pattern speed", 1.0, 0.2, 3.0, 0.1);
+    private final SliderSetting smoothPatternSize = new SliderSetting("Smooth: pattern size (%)", 55.0, 10.0, 95.0, 5.0);
+    private final BoolSetting smoothLowerInAir = new BoolSetting("Smooth: aim lower while jumping", true);
     private final MultiSetting targets = new MultiSetting("Targets",
             List.of(PLAYERS, NAKED, MOBS), PLAYERS, NAKED, MOBS);
     private final MultiSetting misc = new MultiSetting("Checks",
@@ -100,7 +114,8 @@ public final class AttackAura extends Module {
                 Category.COMBAT);
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
-        with(this.attackRange, this.preRange, this.movementType, this.targets, this.misc,
+        with(this.attackRange, this.preRange, this.movementType, this.rotationMode, this.smoothSpeed, this.smoothJerk,
+                this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.targets, this.misc,
                 this.extras, this.chargeSpread);
 
         ComponentManager.getInstance().init();
@@ -331,7 +346,39 @@ public final class AttackAura extends Module {
     }
 
     public static boolean spaceTime() {
-        return instance != null;
+        return instance != null && !smoothRotation();
+    }
+
+    public static boolean smoothRotation() {
+        return instance != null && instance.rotationMode.is(ROT_SMOOTH);
+    }
+
+    public static float smoothSpeed() {
+        return instance == null ? 1.0F : (float) instance.smoothSpeed.value();
+    }
+
+    public static float smoothJerk() {
+        return instance == null ? 0.65F : (float) instance.smoothJerk.value() / 100.0F;
+    }
+
+    public static String smoothPattern() {
+        return instance == null ? SmoothRotation.NORMAL : instance.smoothPattern.value();
+    }
+
+    public static float smoothPatternSpeed() {
+        return instance == null ? 1.0F : (float) instance.smoothPatternSpeed.value();
+    }
+
+    public static float smoothPatternSize() {
+        return instance == null ? 0.55F : (float) instance.smoothPatternSize.value() / 100.0F;
+    }
+
+    public static boolean smoothLowerInAir() {
+        return instance != null && instance.smoothLowerInAir.value();
+    }
+
+    private static boolean aimedNow() {
+        return smoothRotation() ? SmoothRotation.aimed() : SpaceTime.aimed();
     }
 
     public static float targetAngularHalf() {
@@ -369,7 +416,7 @@ public final class AttackAura extends Module {
             return;
         }
 
-        if (!SpaceTime.aimed()) {
+        if (!aimedNow()) {
             return;
         }
 
@@ -415,6 +462,7 @@ public final class AttackAura extends Module {
 
         boolean canAttack = Attack.shouldAttack(target, false, true, 0L, ranges);
         SpaceTime.onRotation(target, canAttack);
+        SmoothRotation.onRotation(target, canAttack);
     }
 
     private void updateTarget() {
@@ -508,6 +556,7 @@ public final class AttackAura extends Module {
         AuraProfile.roll();
 
         SpaceTime.reshuffleAll();
+        SmoothRotation.reshuffleAll();
 
         Attack.getCooldownTimer().reset();
 
@@ -529,6 +578,7 @@ public final class AttackAura extends Module {
         preferred = null;
 
         SpaceTime.forget();
+        SmoothRotation.forget();
 
         releaseSprint();
 
