@@ -7,6 +7,7 @@ import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.render.CrystalsEsp;
 import dev.hatek.client.render.LightningEsp;
+import dev.hatek.client.render.SoulsEsp;
 import dev.hatek.client.render.TargetTracker;
 import dev.hatek.client.render.WorldProjection;
 import dev.hatek.client.ui.render.Render2D;
@@ -16,16 +17,18 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
-/** Effect around the current target. Lightning: flashing zigzag arcs. Crystals: faceted gems orbiting in tiers. */
+/** Effect around the current target. Lightning: flashing zigzag arcs. Crystals: faceted gems orbiting in tiers. Souls: glowing comets circling the target. */
 public final class TargetEsp extends Module {
     private static TargetEsp instance;
     private static final long START = System.nanoTime();
 
-    private final ModeSetting mode = new ModeSetting("Mode", 0, "Lightning", "Crystals");
+    private final ModeSetting mode = new ModeSetting("Mode", 0, "Lightning", "Crystals", "Souls");
     private final ColorSetting color = new ColorSetting("Color", 0xFFFF4D8D);
     private final SliderSetting size = new SliderSetting("Size (%)", 100.0, 50.0, 200.0, 5.0);
     private final SliderSetting thickness = new SliderSetting("Thickness (%)", 100.0, 50.0, 200.0, 5.0);
     private final SliderSetting glow = new SliderSetting("Glow (%)", 100.0, 0.0, 100.0, 5.0);
+    private final SliderSetting souls = new SliderSetting("Souls", 4.0, 1.0, 6.0, 1.0);
+    private final SliderSetting trail = new SliderSetting("Trail length (%)", 100.0, 30.0, 200.0, 5.0);
     private final SliderSetting speed = new SliderSetting("Speed", 1.0, 0.3, 3.0, 0.1);
 
     private float alpha;
@@ -35,7 +38,7 @@ public final class TargetEsp extends Module {
     public TargetEsp() {
         super("TargetESP", "Effect around the target you are fighting", Category.RENDER);
         instance = this;
-        with(this.mode, this.color, this.size, this.thickness, this.glow, this.speed);
+        with(this.mode, this.color, this.size, this.thickness, this.glow, this.speed, this.souls, this.trail);
     }
 
     public static TargetEsp instance() {
@@ -71,7 +74,12 @@ public final class TargetEsp extends Module {
         Render2D.begin(gg);
         try {
             Render2D.pushAlpha(this.alpha);
-            if (this.mode.is("Crystals")) {
+            if (this.mode.is("Souls")) {
+                boolean visible = mc.player.hasLineOfSight(this.shown);
+                SoulsEsp.render(gg, this.shown, base, time, this.color.value(), (int) Math.round(this.souls.value()),
+                        (float) this.size.value() / 100.0f, (float) this.thickness.value() / 100.0f,
+                        (float) this.trail.value() / 100.0f, (float) this.glow.value() / 100.0f, visible ? 1.0f : 0.45f);
+            } else if (this.mode.is("Crystals")) {
                 boolean visible = mc.player.hasLineOfSight(this.shown);
                 CrystalsEsp.render(gg, this.shown, base, (float) this.speed.value(),
                         (float) this.size.value() / 100.0f, (float) this.glow.value() / 100.0f,
