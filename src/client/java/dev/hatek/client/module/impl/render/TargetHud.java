@@ -12,6 +12,9 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.PlayerFaceExtractor;
+import net.minecraft.client.gui.screens.ChatScreen;
+import dev.hatek.client.ui.Style;
+import org.lwjgl.glfw.GLFW;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
@@ -32,14 +35,19 @@ public final class TargetHud extends Module {
     private static final int BAR_FIXED = 0xFFE8C23A;
 
     private final SliderSetting scale = new SliderSetting("Scale (%)", 100.0, 50.0, 200.0, 5.0);
-    private final SliderSetting posX = new SliderSetting("Position X (%)", 62.0, 0.0, 100.0, 1.0);
-    private final SliderSetting posY = new SliderSetting("Position Y (%)", 55.0, 0.0, 100.0, 1.0);
+    private final SliderSetting posX = new SliderSetting("Position X (%)", 62.0, 0.0, 100.0, 0.1);
+    private final SliderSetting posY = new SliderSetting("Position Y (%)", 55.0, 0.0, 100.0, 0.1);
     private final ModeSetting barColor = new ModeSetting("Bar color", 0, "Fixed", "By health");
 
     private float alpha;
     private LivingEntity shown;
     private float hpShown = -1.0f;
     private long lastFrame = System.nanoTime();
+    private boolean editing;
+    private boolean dragging;
+    private boolean mouseWasDown;
+    private double grabX;
+    private double grabY;
 
     public TargetHud() {
         super("TargetHUD", "Card with the target's face, name and health", Category.RENDER);
@@ -63,7 +71,16 @@ public final class TargetHud extends Module {
         float dt = Math.min((now - this.lastFrame) / 1.0e9f, 0.1f);
         this.lastFrame = now;
 
+        // with the chat open the card is shown even without a target and can be dragged
+        this.editing = mc.gui.screen() instanceof ChatScreen;
         LivingEntity target = TargetTracker.current();
+        if (this.editing && target == null) {
+            target = mc.player;
+        }
+        if (!this.editing) {
+            this.dragging = false;
+            this.mouseWasDown = false;
+        }
         if (target != null) {
             if (target != this.shown) {
                 this.hpShown = -1.0f;
@@ -102,7 +119,20 @@ public final class TargetHud extends Module {
         float x = (Render2D.screenWidth() - cardW) * (float) this.posX.value() / 100.0f;
         float y = (Render2D.screenHeight() - cardH) * (float) this.posY.value() / 100.0f;
 
+        if (this.editing) {
+            handleDrag(x, y, cardW, cardH);
+            x = (Render2D.screenWidth() - cardW) * (float) this.posX.value() / 100.0f;
+            y = (Render2D.screenHeight() - cardH) * (float) this.posY.value() / 100.0f;
+        }
+
         Render2D.pushAlpha(this.alpha);
+        if (this.editing) {
+            // frame and hint while the card can be moved
+            int frame = Render2D.withAlpha(Style.accent(), this.dragging ? 0.9f : 0.55f);
+            Render2D.round(gg, x - 3.0f * s, y - 3.0f * s, cardW + 6.0f * s, cardH + 6.0f * s, 16.0f * s, frame);
+            HFont hint = Fonts.of(Fonts.INTER_MEDIUM, Math.max(8, Math.round(12.0f * s)));
+            hint.draw(gg, "Drag to move", x, y - 8.0f * s, 0xFFFFFFFF);
+        }
         Render2D.round(gg, x, y, cardW, cardH, 13.0f * s, BACKGROUND);
 
         // face
@@ -136,6 +166,33 @@ public final class TargetHud extends Module {
             Render2D.round(gg, barX, barY, fillW, barH, 4.0f * s, barColorFor(frac));
         }
         Render2D.popAlpha();
+    }
+
+    /** Left mouse button drags the card; the position is stored in the Position X/Y settings. */
+    private void handleDrag(float x, float y, float cardW, float cardH) {
+        Minecraft mc = Minecraft.getInstance();
+        double mx = Render2D.mouseX();
+        double my = Render2D.mouseY();
+        boolean down = GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+        if (down && !this.mouseWasDown && Render2D.hovered(mx, my, x, y, cardW, cardH)) {
+            this.dragging = true;
+            this.grabX = mx - x;
+            this.grabY = my - y;
+        }
+        if (!down) {
+            this.dragging = false;
+        }
+        if (this.dragging) {
+            double freeW = Render2D.screenWidth() - cardW;
+            double freeH = Render2D.screenHeight() - cardH;
+            if (freeW > 1.0) {
+                this.posX.value((mx - this.grabX) / freeW * 100.0);
+            }
+            if (freeH > 1.0) {
+                this.posY.value((my - this.grabY) / freeH * 100.0);
+            }
+        }
+        this.mouseWasDown = down;
     }
 
     private int barColorFor(float frac) {
