@@ -17,6 +17,10 @@ public class MouseHandlerMixin {
             )
     )
     private void hatek$onLook(LocalPlayer player, double yaw, double pitch) {
+        if (dev.hatek.client.module.impl.render.Freecam.active()) {
+            dev.hatek.client.module.impl.render.Freecam.turn(yaw, pitch);
+            return;
+        }
         if (!ComponentManager.look(yaw, pitch)) {
             player.turn(yaw, pitch);
         }

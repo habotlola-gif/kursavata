@@ -10,6 +10,7 @@ import dev.hatek.client.module.impl.movement.DragonFly;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
+import dev.hatek.client.module.impl.render.Freecam;
 import dev.hatek.client.module.impl.render.Fullbright;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.client.module.impl.render.NameTags;
@@ -104,6 +105,8 @@ public final class ModuleManager {
         MODULES.add(new Interface());
 
         MODULES.add(new Fullbright());
+
+        MODULES.add(new Freecam());
 
         MODULES.add(new TimeChanger());
 
