@@ -5,8 +5,6 @@ import dev.hatek.client.module.impl.combat.aura.rotation.ComponentManager;
 import net.minecraft.client.Camera;
 import dev.hatek.client.module.impl.render.Freecam;
 import net.minecraft.client.DeltaTracker;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -26,8 +24,8 @@ public abstract class CameraMixin {
     @Shadow
     private boolean detached;
 
-    @Inject(method = "setup", at = @At("TAIL"))
-    private void hatek$freecam(Level level, Entity entity, boolean detached, boolean mirrored, float partial, CallbackInfo ci) {
+    @Inject(method = "alignWithEntity", at = @At("TAIL"))
+    private void hatek$freecam(float partial, CallbackInfo ci) {
         if (Freecam.active()) {
             this.setRotation(Freecam.yaw(), Freecam.pitch());
             this.setPosition(Freecam.position(partial));
