@@ -16,6 +16,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.KineticWeapon;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Locale;
@@ -48,6 +49,7 @@ public final class SuperSpear extends Module {
     private final SliderSetting acceleration = new SliderSetting("Acceleration (blocks/tick per tick)", 2.0, 0.05, 6.0, 0.05);
     private final SliderSetting range = new SliderSetting("Range (blocks)", 100.0, 10.0, 150.0, 1.0);
     private final SliderSetting cone = new SliderSetting("Mark cone (degrees)", 25.0, 3.0, 180.0, 1.0);
+    private final SliderSetting packetBoost = new SliderSetting("Packet boost (extra hops per tick, 0 = off)", 0.0, 0.0, 5.0, 1.0);
     private final BoolSetting useDragonFly = new BoolSetting("Use DragonFly (switch it on, take the faster speed)", true);
     private final BoolSetting stabOnContact = new BoolSetting("Melee hit if the spear did not hurt", true);
     private final BoolSetting stopAfter = new BoolSetting("Stop after the pierce or attempt", true);
@@ -67,7 +69,7 @@ public final class SuperSpear extends Module {
     public SuperSpear() {
         super("SuperSpear", "Right click with a spear aimed at a player: mark, charge, rush through", Category.COMBAT);
         instance = this;
-        with(this.onlyWithSpear, this.speed, this.acceleration, this.range, this.cone, this.useDragonFly,
+        with(this.onlyWithSpear, this.speed, this.acceleration, this.packetBoost, this.range, this.cone, this.useDragonFly,
                 this.stabOnContact, this.stopAfter);
     }
 
@@ -239,9 +241,10 @@ public final class SuperSpear extends Module {
         double distance = toTarget.length();
         Vec3 direction = toTarget.normalize();
         // no braking and no landing inside the target: the spear only hurts targets 2..4.5+speed blocks ahead
+        hop(player, direction, this.currentSpeed);
         player.setDeltaMovement(direction.scale(this.currentSpeed));
         this.active = true;
-        if (distance <= this.currentSpeed) {
+        if (distance <= this.currentSpeed * (1 + boostCount())) {
             // this step carries us through the target
             this.passDirection = direction;
             this.phase = Phase.PASS;
@@ -259,6 +262,7 @@ public final class SuperSpear extends Module {
         }
         if (this.ticks <= PASS_TICKS) {
             // keep flying straight through at full speed
+            hop(player, this.passDirection, this.currentSpeed);
             player.setDeltaMovement(this.passDirection.scale(this.currentSpeed));
             this.active = true;
             return;
@@ -291,12 +295,34 @@ public final class SuperSpear extends Module {
         if (targetDied || (mark != null && !mark.isAlive())) {
             message("Попадание подтверждено сервером; " + name + " убит, метка снята.");
         } else if (lost > 0.01f) {
-            message(String.format(Locale.ROOT, "Попадание подтверждено сервером (-%.1f хп, разгон %.1f бл/тик); метка снята.",
-                    lost, this.peakSpeed));
+            message(String.format(Locale.ROOT, "Попадание подтверждено сервером (-%.1f хп, разгон %.1f бл/тик x%d); метка снята.",
+                    lost, this.peakSpeed, 1 + boostCount()));
         } else {
             message("Попадания нет: сервер не засчитал удар по " + name + "; метка снята.");
         }
         abort(false);
+    }
+
+    private int boostCount() {
+        return (int) Math.round(this.packetBoost.value());
+    }
+
+    /**
+     * Packet boost: before the normal step of this tick the player is moved forward by extra hops, each reported to the
+     * server in its own movement packet. The server then measures a speed of (hops + 1) steps per tick.
+     */
+    private void hop(LocalPlayer player, Vec3 direction, double step) {
+        int hops = boostCount();
+        Minecraft mc = Minecraft.getInstance();
+        if (hops <= 0 || mc.getConnection() == null) {
+            return;
+        }
+        Vec3 position = player.position();
+        for (int i = 0; i < hops; i++) {
+            position = position.add(direction.scale(step));
+            mc.getConnection().send(new ServerboundMovePlayerPacket.PosRot(position, player.getYRot(), player.getXRot(), false, false));
+        }
+        player.setPos(position);
     }
 
     private static void aimAt(LocalPlayer player, Vec3 point) {
