@@ -57,8 +57,13 @@ public final class MoveUtil {
         mc.options.keyRight.setDown(physicallyDown(mc.options.keyRight));
     }
 
-    private static boolean physicallyDown(net.minecraft.client.KeyMapping key) {
-        return InputConstants.isKeyDown(mc().getWindow(), key.getDefaultKey().getValue());
+    /** True when the key the player bound to this action is physically held (ignores what the aura wrote to it). */
+    public static boolean physicallyDown(net.minecraft.client.KeyMapping mapping) {
+        InputConstants.Key bound = ((dev.hatek.mixin.accessor.KeyMappingAccessor) mapping).hatek$boundKey();
+        if (bound.getType() != InputConstants.Type.KEYSYM) {
+            return mapping.isDown();
+        }
+        return InputConstants.isKeyDown(mc().getWindow(), bound.getValue());
     }
 
     public static boolean isMoving() {
@@ -71,16 +76,16 @@ public final class MoveUtil {
         Minecraft mc = mc();
         float forward = 0.0F;
         float strafe = 0.0F;
-        if (InputConstants.isKeyDown(mc.getWindow(), mc.options.keyUp.getDefaultKey().getValue())) {
+        if (physicallyDown(mc.options.keyUp)) {
             forward++;
         }
-        if (InputConstants.isKeyDown(mc.getWindow(), mc.options.keyDown.getDefaultKey().getValue())) {
+        if (physicallyDown(mc.options.keyDown)) {
             forward--;
         }
-        if (InputConstants.isKeyDown(mc.getWindow(), mc.options.keyLeft.getDefaultKey().getValue())) {
+        if (physicallyDown(mc.options.keyLeft)) {
             strafe++;
         }
-        if (InputConstants.isKeyDown(mc.getWindow(), mc.options.keyRight.getDefaultKey().getValue())) {
+        if (physicallyDown(mc.options.keyRight)) {
             strafe--;
         }
         return new float[]{forward, strafe};
@@ -91,6 +96,8 @@ public final class MoveUtil {
         float forward = movement[0];
         float strafe = movement[1];
         if (forward == 0.0F && strafe == 0.0F) {
+            // nothing is held: give back whatever the aura wrote to the keys, they must not stay pressed
+            restoreMovementKeys();
             return;
         }
         apply(forward, strafe, cameraYaw);

@@ -25,6 +25,7 @@
     "MultiPlayerGameModeMixin",
     "ScreenEffectRendererMixin",
     "accessor.GuiGraphicsExtractorAccessor",
+    "accessor.KeyMappingAccessor",
     "accessor.LivingEntityAccessor",
     "accessor.MinecraftAccessor",
     "accessor.ScreenInvoker"

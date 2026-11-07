@@ -129,16 +129,6 @@ public final class AttackAura extends Module {
         return instance;
     }
 
-    /** In "Free" mode with a target: the camera yaw the pressed keys are relative to; otherwise NaN. */
-    public static float freeMoveYaw() {
-        AttackAura self = instance;
-        if (self == null || !self.isEnabled() || target == null || !self.movementType.is(MOVE_FREE)
-                || !FreeLookUtil.detached() || mc().player == null || mc().gui.screen() != null) {
-            return Float.NaN;
-        }
-        return FreeLookUtil.freeYaw;
-    }
-
     public LivingEntity getTarget() {
         return target;
     }
@@ -239,10 +229,11 @@ public final class AttackAura extends Module {
             return;
         }
 
-        // "Default" steers the movement keys toward the target; "Free" never touches the keys: the movement is turned
-        // toward the camera by freeMoveYaw() inside the input (KeyboardInputMixin)
-        if (!MovementManager.getInstance().isMovementLocked() && this.movementType.is(MOVE_DEFAULT)) {
-            MoveUtil.fixMovement(bearingToTarget());
+        // the pressed keys are turned into the keys that move the (rotated) body the way the player wants: toward the
+        // target ("Default") or relative to the camera ("Free"); the server sees keys that match the movement
+        if (!MovementManager.getInstance().isMovementLocked()) {
+            boolean steer = this.movementType.is(MOVE_DEFAULT) && target != null;
+            MoveUtil.fixMovement(steer ? bearingToTarget() : FreeLookUtil.freeYaw);
         }
 
         boolean nearEnough = target != null
