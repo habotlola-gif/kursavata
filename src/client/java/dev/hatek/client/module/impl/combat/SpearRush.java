@@ -6,6 +6,7 @@ import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.chat.Component;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
@@ -34,6 +35,9 @@ public final class SpearRush extends Module {
     private boolean finished;        // this charge is used up; wait for the button to be released
     private double currentSpeed;
     private int contactTicks;
+    private float startHealth;       // target health when it was locked (with absorption)
+    private float lowestHealth;      // the lowest health seen since: a drop means the server registered the hit
+    private boolean noTargetNotified;
 
     public SpearRush() {
         super("SpearRush", "Auto-aim and accelerate into a player while charging a spear in flight", Category.COMBAT);
@@ -55,7 +59,35 @@ public final class SpearRush extends Module {
         reset(false);
     }
 
+    private static void message(String text) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null) {
+            mc.player.sendSystemMessage(Component.literal(text));
+        }
+    }
+
+    private static float healthOf(LivingEntity entity) {
+        return entity.getHealth() + entity.getAbsorptionAmount();
+    }
+
+    /** Tells in the chat whether the server registered a hit on the locked target. */
+    private void reportResult() {
+        if (this.target == null) {
+            return;
+        }
+        String name = this.target.getName().getString();
+        float lost = this.startHealth - Math.min(this.lowestHealth, healthOf(this.target));
+        if (!this.target.isAlive() || healthOf(this.target) <= 0.0f) {
+            message("§aУдар от сервера был: " + name + " убит");
+        } else if (lost > 0.01f) {
+            message(String.format(java.util.Locale.ROOT, "§aУдар от сервера был: %s потерял %.1f хп", name, lost));
+        } else {
+            message("§cУдара от сервера не было: " + name + " не получил урон");
+        }
+    }
+
     private void reset(boolean finishedCharge) {
+        this.noTargetNotified = false;
         this.target = null;
         this.currentSpeed = 0.0;
         this.contactTicks = 0;
@@ -70,6 +102,10 @@ public final class SpearRush extends Module {
         boolean charging = player.isUsingItem() && player.getUseItem().is(ItemTags.SPEARS);
         boolean mayRush = !this.onlyFlying.value() || player.getAbilities().flying;
         if (!charging || !mayRush || !player.isAlive()) {
+            if (this.target != null && !this.finished) {
+                this.lowestHealth = Math.min(this.lowestHealth, healthOf(this.target));
+                reportResult();                      // the charge was released in the middle of the rush
+            }
             reset(false);
             return;
         }
@@ -77,14 +113,29 @@ public final class SpearRush extends Module {
             return;
         }
         if (this.target == null || !this.target.isAlive() || this.target.level() != player.level()) {
+            if (this.target != null && !this.target.isAlive()) {
+                reportResult();                          // the target died mid-rush
+                reset(true);
+                return;
+            }
             this.target = findTarget(player);
             if (this.target == null) {
+                if (!this.noTargetNotified) {
+                    this.noTargetNotified = true;
+                    message("§cЦель не найдена");
+                }
                 return;
             }
             this.currentSpeed = 0.0;
             this.contactTicks = 0;
+            this.startHealth = healthOf(this.target);
+            this.lowestHealth = this.startHealth;
+            message(String.format(java.util.Locale.ROOT, "§aНашёл цель: %s (%.0f бл.), атакую",
+                    this.target.getName().getString(), this.target.distanceTo(player)));
         }
+        this.lowestHealth = Math.min(this.lowestHealth, healthOf(this.target));
         if (this.contactTicks > POST_CONTACT_TICKS) {
+            reportResult();
             reset(true);
             return;
         }
