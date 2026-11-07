@@ -3,6 +3,7 @@ package dev.hatek.client.module;
 import dev.hatek.client.ui.Style;
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.combat.AutoSwap;
+import dev.hatek.client.module.impl.combat.AutoTotem;
 import dev.hatek.client.module.impl.combat.SpearRush;
 import dev.hatek.client.module.impl.movement.AirStuck;
 import dev.hatek.client.module.impl.movement.DragonFly;
@@ -79,6 +80,8 @@ public final class ModuleManager {
         MODULES.add(new AutoSprint().enabled(true).expanded(true));
 
         MODULES.add(new AutoSwap());
+
+        MODULES.add(new AutoTotem());
 
         MODULES.add(new SpearRush());
 

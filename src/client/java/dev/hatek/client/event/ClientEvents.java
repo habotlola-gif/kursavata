@@ -24,10 +24,7 @@ public final class ClientEvents {
         if (airStuck != null) {
             airStuck.beforeTick(mc.player);
         }
-        dev.hatek.client.module.impl.combat.AutoSwap autoSwap = dev.hatek.client.module.impl.combat.AutoSwap.instance();
-        if (autoSwap != null) {
-            autoSwap.beforeTick(mc.player);
-        }
+        dev.hatek.client.module.impl.combat.OffhandSwapper.beforePlayerTick(mc.player);
         dev.hatek.client.module.impl.combat.SpearRush spearRush = dev.hatek.client.module.impl.combat.SpearRush.instance();
         if (spearRush != null) {
             spearRush.beforeTick(mc.player);
@@ -60,10 +57,7 @@ public final class ClientEvents {
         if (airStuck != null) {
             airStuck.afterTick(mc.player);
         }
-        dev.hatek.client.module.impl.combat.AutoSwap autoSwap = dev.hatek.client.module.impl.combat.AutoSwap.instance();
-        if (autoSwap != null) {
-            autoSwap.afterTick();
-        }
+        dev.hatek.client.module.impl.combat.OffhandSwapper.afterPlayerTick();
     }
 
     public static void render3D() {

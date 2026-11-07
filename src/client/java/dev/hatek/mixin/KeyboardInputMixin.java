@@ -1,6 +1,6 @@
 package dev.hatek.mixin;
 
-import dev.hatek.client.module.impl.combat.AutoSwap;
+import dev.hatek.client.module.impl.combat.OffhandSwapper;
 import net.minecraft.client.player.ClientInput;
 import net.minecraft.client.player.KeyboardInput;
 import net.minecraft.world.entity.player.Input;
@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class KeyboardInputMixin extends ClientInput {
     @Inject(method = "tick", at = @At("TAIL"))
     private void hatek$pause(CallbackInfo ci) {
-        if (AutoSwap.pauseMovement()) {
+        if (OffhandSwapper.pauseMovement()) {
             this.keyPresses = new Input(false, false, false, false, false, false, false);
             this.moveVector = Vec2.ZERO;
         }

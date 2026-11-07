@@ -93,6 +93,7 @@ public class HatekClient implements ClientModInitializer {
         }
 
         ModuleManager.tickAll();
+        dev.hatek.client.module.impl.combat.OffhandSwapper.tick();
 
         while (openClickGui.consumeClick()) {
             mc.gui.setScreen(new ClickGuiScreen());
