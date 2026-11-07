@@ -69,6 +69,15 @@ public class HatekClient implements ClientModInitializer {
                     }
                 });
 
+        HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
+                Identifier.fromNamespaceAndPath(MOD_ID, "name_tags"),
+                (graphics, delta) -> {
+                    dev.hatek.client.module.impl.render.NameTags tags = dev.hatek.client.module.impl.render.NameTags.instance();
+                    if (tags != null) {
+                        tags.render(graphics, delta);
+                    }
+                });
+
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);
     }

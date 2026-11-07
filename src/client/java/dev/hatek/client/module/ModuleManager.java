@@ -8,6 +8,7 @@ import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
 import dev.hatek.client.module.impl.render.KeybindsHud;
+import dev.hatek.client.module.impl.render.NameTags;
 import dev.hatek.client.module.impl.render.PotionsHud;
 import dev.hatek.client.module.impl.render.Removals;
 import dev.hatek.client.module.impl.render.ShaderEsp;
@@ -77,6 +78,8 @@ public final class ModuleManager {
         MODULES.add(new AutoSwap());
 
         MODULES.add(new AirStuck());
+
+        MODULES.add(new NameTags());
 
         MODULES.add(new Removals());
 
