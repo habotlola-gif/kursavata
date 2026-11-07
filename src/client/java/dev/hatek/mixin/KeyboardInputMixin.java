@@ -11,14 +11,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Movement keys are ignored while an inventory swap needs the player to stand still, and while SpearRush steers the
+ * Movement keys are ignored while an inventory swap needs the player to stand still, and while SuperSpear steers the
  * player into a target (the player's own input must not fight the rush).
  */
 @Mixin(KeyboardInput.class)
 public abstract class KeyboardInputMixin extends ClientInput {
     @Inject(method = "tick", at = @At("TAIL"))
     private void hatek$pause(CallbackInfo ci) {
-        if (OffhandSwapper.pauseMovement() || dev.hatek.client.module.impl.combat.SpearRush.isActive()) {
+        if (OffhandSwapper.pauseMovement() || dev.hatek.client.module.impl.combat.SuperSpear.isActive()) {
             this.keyPresses = new Input(false, false, false, false, false, false, false);
             this.moveVector = Vec2.ZERO;
         }

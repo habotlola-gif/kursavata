@@ -29,7 +29,7 @@ public final class ClientEvents {
         if (dragonFly != null) {
             dragonFly.beforeTick(mc.player);
         }
-        dev.hatek.client.module.impl.combat.SpearRush spearRush = dev.hatek.client.module.impl.combat.SpearRush.instance();
+        dev.hatek.client.module.impl.combat.SuperSpear spearRush = dev.hatek.client.module.impl.combat.SuperSpear.instance();
         if (spearRush != null) {
             spearRush.beforeTick(mc.player);
         }

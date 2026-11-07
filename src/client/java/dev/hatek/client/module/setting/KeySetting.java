@@ -13,8 +13,12 @@ import java.util.Locale;
 
 /** A key bound to something inside a module (separate from the module's own toggle key). Click, press a key; Esc clears. */
 public final class KeySetting extends Setting {
+    /** Mouse buttons are stored as MOUSE_BASE - button (so button 3, "mouse 4", is -103). */
+    public static final int MOUSE_BASE = -100;
+
     private int key;
     private boolean binding;
+    private final boolean[] mouseWas = new boolean[8];
 
     private final Anim hoverAnim = new Anim(0.0f, 18.0f);
     private final Anim bindAnim = new Anim(0.0f, 14.0f);
@@ -29,13 +33,23 @@ public final class KeySetting extends Setting {
     }
 
     public boolean isSet() {
-        return this.key != GLFW.GLFW_KEY_UNKNOWN && this.key >= 0;
+        return this.key >= 0 || this.key <= MOUSE_BASE;
+    }
+
+    public boolean isMouse() {
+        return this.key <= MOUSE_BASE;
     }
 
     /** True while the bound key is held and no screen is open. */
     public boolean isDown() {
         Minecraft mc = Minecraft.getInstance();
-        return isSet() && mc.gui.screen() == null && InputConstants.isKeyDown(mc.getWindow(), this.key);
+        if (!isSet() || mc.gui.screen() != null) {
+            return false;
+        }
+        if (isMouse()) {
+            return GLFW.glfwGetMouseButton(mc.getWindow().handle(), MOUSE_BASE - this.key) == GLFW.GLFW_PRESS;
+        }
+        return InputConstants.isKeyDown(mc.getWindow(), this.key);
     }
 
     @Override
@@ -57,6 +71,9 @@ public final class KeySetting extends Setting {
         if (!isSet()) {
             return "None";
         }
+        if (isMouse()) {
+            return "MOUSE " + (MOUSE_BASE - this.key + 1);
+        }
         String name = InputConstants.Type.KEYSYM.getOrCreate(this.key).getDisplayName().getString();
         return name.toUpperCase(Locale.ROOT);
     }
@@ -64,6 +81,7 @@ public final class KeySetting extends Setting {
     @Override
     public void render(GuiGraphicsExtractor gg, float x, float baseline, double mx, double my) {
         drawLabel(gg, x, baseline);
+        pollMouseBinding();
         float rowY = controlTop(baseline);
         this.hoverAnim.to(Render2D.hovered(mx, my, x, rowY, Style.ROW_W, Style.ROW_H));
         this.bindAnim.to(this.binding);
@@ -78,6 +96,20 @@ public final class KeySetting extends Setting {
                 Style.FIELD_ICON, Style.FIELD_ICON, tint);
         String text = this.binding ? ((System.currentTimeMillis() / 350L) % 2L == 0L ? "..." : "Press a key") : keyLabel();
         Fonts.body().draw(gg, text, x + 24.0f, rowY + Style.FIELD_TEXT_BASELINE, tint);
+    }
+
+    /** While binding, a middle or side mouse button (buttons 3 to 8) can be the bound key too. */
+    private void pollMouseBinding() {
+        Minecraft mc = Minecraft.getInstance();
+        long window = mc.getWindow().handle();
+        for (int button = 2; button < this.mouseWas.length; button++) {
+            boolean down = GLFW.glfwGetMouseButton(window, button) == GLFW.GLFW_PRESS;
+            if (this.binding && down && !this.mouseWas[button]) {
+                this.key = MOUSE_BASE - button;
+                this.binding = false;
+            }
+            this.mouseWas[button] = down;
+        }
     }
 
     @Override
