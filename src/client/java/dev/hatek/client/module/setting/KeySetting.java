@@ -32,6 +32,16 @@ public final class KeySetting extends Setting {
         return this.key;
     }
 
+    public boolean isBinding() {
+        return this.binding;
+    }
+
+    /** Takes a mouse button / wheel code while the setting waits for a key. */
+    public void assign(int code) {
+        this.key = code;
+        this.binding = false;
+    }
+
     public boolean isSet() {
         return this.key >= 0 || this.key <= MOUSE_BASE;
     }
@@ -47,7 +57,11 @@ public final class KeySetting extends Setting {
             return false;
         }
         if (isMouse()) {
-            return GLFW.glfwGetMouseButton(mc.getWindow().handle(), MOUSE_BASE - this.key) == GLFW.GLFW_PRESS;
+            int button = MOUSE_BASE - this.key;
+            if (dev.hatek.client.module.Wheel.isWheel(button)) {
+                return dev.hatek.client.module.Wheel.active(button);
+            }
+            return GLFW.glfwGetMouseButton(mc.getWindow().handle(), button) == GLFW.GLFW_PRESS;
         }
         return InputConstants.isKeyDown(mc.getWindow(), this.key);
     }
@@ -72,7 +86,9 @@ public final class KeySetting extends Setting {
             return "None";
         }
         if (isMouse()) {
-            return "MOUSE " + (MOUSE_BASE - this.key + 1);
+            int button = MOUSE_BASE - this.key;
+            return dev.hatek.client.module.Wheel.isWheel(button) ? dev.hatek.client.module.Wheel.label(button)
+                    : "MOUSE " + (button + 1);
         }
         String name = InputConstants.Type.KEYSYM.getOrCreate(this.key).getDisplayName().getString();
         return name.toUpperCase(Locale.ROOT);

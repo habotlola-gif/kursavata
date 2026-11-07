@@ -316,6 +316,10 @@ public final class ClickGuiScreen extends Screen {
         double mx = Render2D.mouseX();
         double my = Render2D.mouseY();
         int button = event.button();
+        // a middle / side mouse button is the answer to a bind that waits for a key
+        if (button >= 2 && dev.hatek.client.module.Module.assignBinding(dev.hatek.client.module.Module.MOUSE_BASE - button)) {
+            return true;
+        }
 
         for (Tab value : Tab.values()) {
             float center = panelX + Style.NAV_X + Style.NAV_FIRST
@@ -406,6 +410,11 @@ public final class ClickGuiScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        // the wheel can be a bind too (scroll up / scroll down)
+        if (scrollY != 0.0 && dev.hatek.client.module.Module.assignBinding(dev.hatek.client.module.Module.MOUSE_BASE
+                - (scrollY > 0.0 ? dev.hatek.client.module.Wheel.UP : dev.hatek.client.module.Wheel.DOWN))) {
+            return true;
+        }
         if (!Render2D.hovered(Render2D.mouseX(), Render2D.mouseY(),
                 panelX, panelY, Style.PANEL_W, Style.PANEL_H)) {
             return false;

@@ -8,6 +8,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 
@@ -19,6 +21,7 @@ public final class ClickAction extends Module {
     private final KeySetting pearlKey = new KeySetting("Жемчуг эндера (клавиша)", -1);
     private final KeySetting windKey = new KeySetting("Заряд ветра (клавиша)", -1);
     private final BoolSetting swapBack = new BoolSetting("Вернуть прошлый слот", true);
+    private final BoolSetting fromInventory = new BoolSetting("Брать и из инвентаря (не только хотбар)", true);
     private final BoolSetting notify = new BoolSetting("Сообщать, если предмета нет", true);
 
     private boolean pearlWas;
@@ -26,7 +29,7 @@ public final class ClickAction extends Module {
 
     public ClickAction() {
         super("ClickAction", "Keys that throw an ender pearl or a wind charge at once", Category.COMBAT);
-        with(this.pearlKey, this.windKey, this.swapBack, this.notify);
+        with(this.pearlKey, this.windKey, this.swapBack, this.fromInventory, this.notify);
     }
 
     @Override
@@ -69,9 +72,17 @@ public final class ClickAction extends Module {
                 break;
             }
         }
+        if (slot < 0 && this.fromInventory.value()) {
+            for (int i = 9; i < 36; i++) {
+                if (player.getInventory().getItem(i).is(item)) {
+                    throwFromInventory(player, mc, i);
+                    return;
+                }
+            }
+        }
         if (slot < 0) {
             if (this.notify.value()) {
-                player.sendSystemMessage(Component.literal("§bClickAction: §fв хотбаре нет " + label + "."));
+                player.sendSystemMessage(Component.literal("§bClickAction: §fнет " + label + "."));
             }
             return;
         }
@@ -82,5 +93,15 @@ public final class ClickAction extends Module {
         if (this.swapBack.value() && previous != slot) {
             player.getInventory().setSelectedSlot(previous);
         }
+    }
+
+    /** The item sits in the main inventory: swap it into the selected hotbar slot, use it, swap it back. */
+    private void throwFromInventory(LocalPlayer player, Minecraft mc, int inventorySlot) {
+        int selected = player.getInventory().getSelectedSlot();
+        int container = player.inventoryMenu.containerId;
+        mc.gameMode.handleContainerInput(container, inventorySlot, selected, ContainerInput.SWAP, (Player) player);
+        mc.gameMode.useItem(player, InteractionHand.MAIN_HAND);
+        player.swing(InteractionHand.MAIN_HAND);
+        mc.gameMode.handleContainerInput(container, inventorySlot, selected, ContainerInput.SWAP, (Player) player);
     }
 }

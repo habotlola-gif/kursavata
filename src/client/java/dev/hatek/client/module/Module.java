@@ -238,9 +238,34 @@ public class Module {
     public static boolean isBindDown(int key) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (key <= MOUSE_BASE) {
-            return GLFW.glfwGetMouseButton(mc.getWindow().handle(), MOUSE_BASE - key) == GLFW.GLFW_PRESS;
+            int button = MOUSE_BASE - key;
+            if (Wheel.isWheel(button)) {
+                return Wheel.active(button);
+            }
+            return GLFW.glfwGetMouseButton(mc.getWindow().handle(), button) == GLFW.GLFW_PRESS;
         }
         return key != GLFW.GLFW_KEY_UNKNOWN && InputConstants.isKeyDown(mc.getWindow(), key);
+    }
+
+    /**
+     * Gives the code of a mouse button (or the wheel) to whatever is waiting for a bind: a module's own key or a key
+     * setting. True when something was waiting.
+     */
+    public static boolean assignBinding(int code) {
+        for (Module module : ModuleManager.all()) {
+            if (module.binding) {
+                module.keyCode = code;
+                module.binding = false;
+                return true;
+            }
+            for (Setting setting : module.settings()) {
+                if (setting instanceof dev.hatek.client.module.setting.KeySetting key && key.isBinding()) {
+                    key.assign(code);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** While waiting for a key, a middle or side mouse button can be the bind too. */
@@ -261,7 +286,8 @@ public class Module {
             return "-";
         }
         if (this.keyCode <= MOUSE_BASE) {
-            return "M" + (MOUSE_BASE - this.keyCode + 1);
+            int button = MOUSE_BASE - this.keyCode;
+            return Wheel.isWheel(button) ? (button == Wheel.UP ? "W↑" : "W↓") : "M" + (button + 1);
         }
         String name = InputConstants.Type.KEYSYM.getOrCreate(this.keyCode).getDisplayName().getString();
         return name.length() > 3 ? name.substring(0, 3).toUpperCase(Locale.ROOT)
