@@ -24,6 +24,10 @@ public final class ClientEvents {
         if (airStuck != null) {
             airStuck.beforeTick(mc.player);
         }
+        dev.hatek.client.module.impl.combat.AutoSwap autoSwap = dev.hatek.client.module.impl.combat.AutoSwap.instance();
+        if (autoSwap != null) {
+            autoSwap.beforeTick(mc.player);
+        }
 
         for (Module module : ModuleManager.all()) {
             if (module instanceof NoJumpDelay jump) {
@@ -47,6 +51,10 @@ public final class ClientEvents {
         dev.hatek.client.module.impl.movement.AirStuck airStuck = dev.hatek.client.module.impl.movement.AirStuck.instance();
         if (airStuck != null) {
             airStuck.afterTick(mc.player);
+        }
+        dev.hatek.client.module.impl.combat.AutoSwap autoSwap = dev.hatek.client.module.impl.combat.AutoSwap.instance();
+        if (autoSwap != null) {
+            autoSwap.afterTick();
         }
     }
 

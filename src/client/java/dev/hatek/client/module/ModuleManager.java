@@ -2,6 +2,7 @@ package dev.hatek.client.module;
 
 import dev.hatek.client.ui.Style;
 import dev.hatek.client.module.impl.combat.AttackAura;
+import dev.hatek.client.module.impl.combat.AutoSwap;
 import dev.hatek.client.module.impl.movement.AirStuck;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
@@ -67,6 +68,8 @@ public final class ModuleManager {
         MODULES.add(new AttackAura().expanded(true));
 
         MODULES.add(new AutoSprint().enabled(true).expanded(true));
+
+        MODULES.add(new AutoSwap());
 
         MODULES.add(new AirStuck());
 

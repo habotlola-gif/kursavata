@@ -5,6 +5,7 @@ import dev.hatek.client.module.Module;
 import dev.hatek.client.module.setting.ColorSetting;
 import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.SliderSetting;
+import dev.hatek.client.render.CrystalsEsp;
 import dev.hatek.client.render.LightningEsp;
 import dev.hatek.client.render.TargetTracker;
 import dev.hatek.client.render.WorldProjection;
@@ -15,12 +16,12 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
-/** Effect around the current target. Mode Lightning: flashing zigzag arcs. */
+/** Effect around the current target. Lightning: flashing zigzag arcs. Crystals: faceted gems orbiting in tiers. */
 public final class TargetEsp extends Module {
     private static TargetEsp instance;
     private static final long START = System.nanoTime();
 
-    private final ModeSetting mode = new ModeSetting("Mode", 0, "Lightning");
+    private final ModeSetting mode = new ModeSetting("Mode", 0, "Lightning", "Crystals");
     private final ColorSetting color = new ColorSetting("Color", 0xFFFF4D8D);
     private final SliderSetting size = new SliderSetting("Size (%)", 100.0, 50.0, 200.0, 5.0);
     private final SliderSetting thickness = new SliderSetting("Thickness (%)", 100.0, 50.0, 200.0, 5.0);
@@ -70,9 +71,16 @@ public final class TargetEsp extends Module {
         Render2D.begin(gg);
         try {
             Render2D.pushAlpha(this.alpha);
-            LightningEsp.render(gg, this.shown, base, time, this.color.value(), partial,
-                    (float) this.size.value() / 100.0f, (float) this.thickness.value() / 100.0f,
-                    (float) this.glow.value() / 100.0f);
+            if (this.mode.is("Crystals")) {
+                boolean visible = mc.player.hasLineOfSight(this.shown);
+                CrystalsEsp.render(gg, this.shown, base, (float) this.speed.value(),
+                        (float) this.size.value() / 100.0f, (float) this.glow.value() / 100.0f,
+                        this.color.value(), this.alpha, partial, visible);
+            } else {
+                LightningEsp.render(gg, this.shown, base, time, this.color.value(), partial,
+                        (float) this.size.value() / 100.0f, (float) this.thickness.value() / 100.0f,
+                        (float) this.glow.value() / 100.0f);
+            }
             Render2D.popAlpha();
         } finally {
             Render2D.end(gg);

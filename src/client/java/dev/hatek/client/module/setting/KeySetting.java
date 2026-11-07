@@ -1,0 +1,124 @@
+package dev.hatek.client.module.setting;
+
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.hatek.client.ui.Style;
+import dev.hatek.client.ui.render.Anim;
+import dev.hatek.client.ui.render.Fonts;
+import dev.hatek.client.ui.render.Render2D;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import org.lwjgl.glfw.GLFW;
+
+import java.util.Locale;
+
+/** A key bound to something inside a module (separate from the module's own toggle key). Click, press a key; Esc clears. */
+public final class KeySetting extends Setting {
+    private int key;
+    private boolean binding;
+
+    private final Anim hoverAnim = new Anim(0.0f, 18.0f);
+    private final Anim bindAnim = new Anim(0.0f, 14.0f);
+
+    public KeySetting(String name, int key) {
+        super(name);
+        this.key = key;
+    }
+
+    public int key() {
+        return this.key;
+    }
+
+    public boolean isSet() {
+        return this.key != GLFW.GLFW_KEY_UNKNOWN && this.key >= 0;
+    }
+
+    /** True while the bound key is held and no screen is open. */
+    public boolean isDown() {
+        Minecraft mc = Minecraft.getInstance();
+        return isSet() && mc.gui.screen() == null && InputConstants.isKeyDown(mc.getWindow(), this.key);
+    }
+
+    @Override
+    public float bottomOffset() {
+        return Style.LABEL_TO_CONTROL + Style.ROW_H;
+    }
+
+    @Override
+    public boolean capturesInput() {
+        return this.binding;
+    }
+
+    @Override
+    public void closePopups() {
+        this.binding = false;
+    }
+
+    private String keyLabel() {
+        if (!isSet()) {
+            return "None";
+        }
+        String name = InputConstants.Type.KEYSYM.getOrCreate(this.key).getDisplayName().getString();
+        return name.toUpperCase(Locale.ROOT);
+    }
+
+    @Override
+    public void render(GuiGraphicsExtractor gg, float x, float baseline, double mx, double my) {
+        drawLabel(gg, x, baseline);
+        float rowY = controlTop(baseline);
+        this.hoverAnim.to(Render2D.hovered(mx, my, x, rowY, Style.ROW_W, Style.ROW_H));
+        this.bindAnim.to(this.binding);
+        float hover = this.hoverAnim.get();
+        float bind = this.bindAnim.get();
+
+        Render2D.round(gg, x, rowY, Style.ROW_W, Style.ROW_H, Style.ROW_R,
+                Render2D.lerp(Render2D.lerp(Style.WHITE_04, Style.white(0.07f), hover), Style.accent(), bind));
+
+        int tint = Render2D.lerp(Style.WHITE_45, Style.WHITE, Math.max(hover * 0.6f, bind));
+        Render2D.icon(gg, "keyboard", x + Style.FIELD_ICON_X, rowY + (Style.ROW_H - Style.FIELD_ICON) / 2.0f,
+                Style.FIELD_ICON, Style.FIELD_ICON, tint);
+        String text = this.binding ? ((System.currentTimeMillis() / 350L) % 2L == 0L ? "..." : "Press a key") : keyLabel();
+        Fonts.body().draw(gg, text, x + 24.0f, rowY + Style.FIELD_TEXT_BASELINE, tint);
+    }
+
+    @Override
+    public boolean mouseClicked(float x, float baseline, double mx, double my, int button) {
+        boolean inside = Render2D.hovered(mx, my, x, controlTop(baseline), Style.ROW_W, Style.ROW_H);
+        if (inside && button == 0) {
+            this.binding = true;
+            return true;
+        }
+        if (inside && button == 1) {
+            this.key = GLFW.GLFW_KEY_UNKNOWN;
+            this.binding = false;
+            return true;
+        }
+        if (this.binding) {
+            this.binding = false;
+        }
+        return inside;
+    }
+
+    @Override
+    public boolean keyPressed(int pressed) {
+        if (!this.binding) {
+            return false;
+        }
+        this.key = pressed == GLFW.GLFW_KEY_ESCAPE ? GLFW.GLFW_KEY_UNKNOWN : pressed;
+        this.binding = false;
+        return true;
+    }
+
+    @Override
+    public String serialize() {
+        return Integer.toString(this.key);
+    }
+
+    @Override
+    public void deserialize(String raw) {
+        try {
+            this.key = Integer.parseInt(raw.trim());
+        } catch (NumberFormatException ignored) {
+            this.key = GLFW.GLFW_KEY_UNKNOWN;
+        }
+    }
+}

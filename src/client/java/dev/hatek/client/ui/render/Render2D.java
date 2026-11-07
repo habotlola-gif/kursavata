@@ -185,7 +185,7 @@ public final class Render2D {
         gg.blit(RenderPipelines.GUI_TEXTURED, id, x, y, u, v, w, h, texW, texH, color);
     }
 
-    private static int tint(int argb) {
+    public static int tint(int argb) {
         if (alpha >= 1.0f) {
             return argb;
         }
