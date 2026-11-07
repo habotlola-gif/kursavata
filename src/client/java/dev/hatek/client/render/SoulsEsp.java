@@ -9,12 +9,14 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Souls target effect: a few glowing comets circle the target at different heights. Each soul is a bright head
- * with a long tapering trail that follows the path it just flew. Trails are drawn as tapered ribbons
- * (two triangles per segment), with a wide soft pass under a bright core and a halo on the head.
+ * Souls target effect: a few glowing comets circle the target at different heights. Each soul is a teardrop: a fat
+ * rounded head and a long tail that tapers to a point along the path it just flew, with a white core, a coloured
+ * body and a soft halo. The tail is a ribbon whose left/right edge points are shared between neighbouring segments
+ * (no seams), the head is capped with a small triangle fan. The shape was tuned against an offline preview.
  */
 public final class SoulsEsp {
-    private static final int POINTS = 20;                       // samples along the trail
+    private static final int POINTS = 16;           // samples along the trail
+    private static final int CAP_STEPS = 10;        // triangles in the round head cap
 
     private SoulsEsp() {
     }
@@ -26,12 +28,13 @@ public final class SoulsEsp {
         double height = entity.getBbHeight();
         double radius = Math.max(0.75, entity.getBbWidth() * 1.3) * sizeMul;
         double trailSeconds = 0.6 * trailMul;
-        double worldSize = 0.055 * thicknessMul;           // head width in blocks (a thin comet, not a band)
+        double worldSize = 0.15 * thicknessMul;                       // head width in blocks
         double fov = Math.toRadians(mc.options.fov().get());
         double pixelsPerUnit = Render2D.screenHeight() / (2.0 * Math.tan(fov / 2.0));
+        double maxWidth = 80.0 * thicknessMul;
 
-        int coreColor = Render2D.lerp(0xFF000000 | (color & 0xFFFFFF), 0xFFFFFFFF, 0.6f);
-        int glowColor = 0xFF000000 | (color & 0xFFFFFF);
+        int bodyColor = 0xFF000000 | (color & 0xFFFFFF);
+        int coreColor = Render2D.lerp(bodyColor, 0xFFFFFFFF, 0.65f);
 
         for (int soul = 0; soul < souls; soul++) {
             double phase = soul * Math.PI * 2.0 / souls;
@@ -45,29 +48,27 @@ public final class SoulsEsp {
                     continue;
                 }
                 double distance = Math.max(0.3, point.distanceTo(camera));
-                double width = worldSize * pixelsPerUnit / distance * (0.10 + 0.90 * Math.pow(fade, 0.9));
-                pts[k] = new float[]{screen[0], screen[1], (float) Math.min(width, 30.0 * thicknessMul), fade};
+                double width = worldSize * pixelsPerUnit / distance * (0.02 + 0.98 * Math.pow(fade, 0.85));
+                pts[k] = new float[]{screen[0], screen[1], (float) Math.min(width, maxWidth), fade};
             }
-            if (glow > 0.0f) {
-                ribbon(gg, pts, 2.2f, glowColor, 0.22f * glow * visibility);
-            }
-            ribbon(gg, pts, 1.0f, coreColor, 0.95f * visibility);
+            // soft edge, coloured body, white core
+            ribbon(gg, pts, 1.7f, bodyColor, 0.22f * visibility * Math.min(1.0f, 0.4f + glow), 1.0f);
+            ribbon(gg, pts, 1.0f, coreColor, 0.95f * visibility, 0.6f);
+            ribbon(gg, pts, 0.45f, 0xFFFFFFFF, 0.90f * visibility, 0.8f);
 
             if (glow > 0.0f) {
-                // soft halo along the trail (every second sample) and a bright one on the head
-                for (int k = POINTS - 1; k >= 1; k -= 2) {
+                // soft halo along the trail (every third sample) and a bigger one on the head
+                for (int k = POINTS - 1; k >= 1; k -= 3) {
                     float[] p = pts[k];
                     if (p != null) {
-                        Render2D.glow(gg, p[0], p[1], Math.max(10.0f, p[2] * 5.0f),
-                                Render2D.withAlpha(glowColor, Mth.clamp(0.22f * glow * visibility * p[3], 0.0f, 1.0f)));
+                        Render2D.glow(gg, p[0], p[1], Math.max(10.0f, p[2] * 4.5f),
+                                Render2D.withAlpha(bodyColor, Mth.clamp(0.20f * glow * visibility * p[3], 0.0f, 1.0f)));
                     }
                 }
                 float[] head = pts[0];
                 if (head != null) {
-                    Render2D.glow(gg, head[0], head[1], Math.max(24.0f, head[2] * 9.0f),
-                            Render2D.withAlpha(glowColor, Mth.clamp(0.55f * glow * visibility, 0.0f, 1.0f)));
-                    Render2D.glow(gg, head[0], head[1], Math.max(10.0f, head[2] * 3.2f),
-                            Render2D.withAlpha(0xFFFFFFFF, Mth.clamp(0.75f * visibility, 0.0f, 1.0f)));
+                    Render2D.glow(gg, head[0], head[1], Math.max(24.0f, head[2] * 6.0f),
+                            Render2D.withAlpha(bodyColor, Mth.clamp(0.55f * glow * visibility, 0.0f, 1.0f)));
                 }
             }
         }
@@ -82,32 +83,62 @@ public final class SoulsEsp {
         return base.add(Math.cos(angle) * r, y, Math.sin(angle) * r);
     }
 
-    /** A tapered ribbon along the points; each point is {x, y, width, fade}. */
-    private static void ribbon(GuiGraphicsExtractor gg, float[][] pts, float widthMul, int color, float alpha) {
-        for (int i = 0; i + 1 < pts.length; i++) {
-            float[] a = pts[i];
-            float[] b = pts[i + 1];
-            if (a == null || b == null) {
+    /**
+     * A tapered ribbon along the points {x, y, width, fade}. Width is scaled by {@code widthMul}; the segment alpha
+     * is {@code alpha * fade^alphaPow}. Neighbouring segments share their edge points, and the head is capped round.
+     */
+    private static void ribbon(GuiGraphicsExtractor gg, float[][] pts, float widthMul, int color, float alpha, float alphaPow) {
+        int n = pts.length;
+        float[][] left = new float[n][];
+        float[][] right = new float[n][];
+        for (int i = 0; i < n; i++) {
+            if (pts[i] == null) {
                 continue;
             }
-            float dx = b[0] - a[0];
-            float dy = b[1] - a[1];
-            float len = (float) Math.hypot(dx, dy);
-            if (len < 0.01f) {
+            // averaged normal of the neighbouring segments
+            float vx = 0.0f;
+            float vy = 0.0f;
+            for (int j = i - 1; j <= i; j++) {
+                if (j >= 0 && j + 1 < n && pts[j] != null && pts[j + 1] != null) {
+                    float dx = pts[j + 1][0] - pts[j][0];
+                    float dy = pts[j + 1][1] - pts[j][1];
+                    float len = (float) Math.hypot(dx, dy);
+                    if (len > 0.01f) {
+                        vx += -dy / len;
+                        vy += dx / len;
+                    }
+                }
+            }
+            float nl = (float) Math.hypot(vx, vy);
+            if (nl < 1.0e-4f) {
                 continue;
             }
-            float nx = -dy / len;
-            float ny = dx / len;
-            float wa = Math.max(0.5f, a[2] * widthMul) * 0.5f;
-            float wb = Math.max(0.5f, b[2] * widthMul) * 0.5f;
-            float fade = (a[3] + b[3]) * 0.5f;
-            int segment = Render2D.withAlpha(color, Mth.clamp(alpha * (float) Math.pow(fade, 1.1), 0.0f, 1.0f));
-            float ax1 = a[0] + nx * wa, ay1 = a[1] + ny * wa;
-            float ax2 = a[0] - nx * wa, ay2 = a[1] - ny * wa;
-            float bx1 = b[0] + nx * wb, by1 = b[1] + ny * wb;
-            float bx2 = b[0] - nx * wb, by2 = b[1] - ny * wb;
-            Draw.triangle(gg, ax1, ay1, ax2, ay2, bx1, by1, segment);
-            Draw.triangle(gg, ax2, ay2, bx2, by2, bx1, by1, segment);
+            vx /= nl;
+            vy /= nl;
+            float half = Math.max(0.4f, pts[i][2] * widthMul) * 0.5f;
+            left[i] = new float[]{pts[i][0] + vx * half, pts[i][1] + vy * half};
+            right[i] = new float[]{pts[i][0] - vx * half, pts[i][1] - vy * half};
+        }
+        for (int i = 0; i + 1 < n; i++) {
+            if (left[i] == null || left[i + 1] == null) {
+                continue;
+            }
+            float fade = (pts[i][3] + pts[i + 1][3]) * 0.5f;
+            int c = Render2D.withAlpha(color, Mth.clamp(alpha * (float) Math.pow(fade, alphaPow), 0.0f, 1.0f));
+            Draw.triangle(gg, left[i][0], left[i][1], right[i][0], right[i][1], left[i + 1][0], left[i + 1][1], c);
+            Draw.triangle(gg, right[i][0], right[i][1], right[i + 1][0], right[i + 1][1], left[i + 1][0], left[i + 1][1], c);
+        }
+        // round head
+        if (pts[0] != null && left[0] != null) {
+            float r = Math.max(0.4f, pts[0][2] * widthMul) * 0.5f;
+            int c = Render2D.withAlpha(color, Mth.clamp(alpha, 0.0f, 1.0f));
+            for (int k = 0; k < CAP_STEPS; k++) {
+                double a0 = Math.PI * 2.0 * k / CAP_STEPS;
+                double a1 = Math.PI * 2.0 * (k + 1) / CAP_STEPS;
+                Draw.triangle(gg, pts[0][0], pts[0][1],
+                        pts[0][0] + (float) Math.cos(a0) * r, pts[0][1] + (float) Math.sin(a0) * r,
+                        pts[0][0] + (float) Math.cos(a1) * r, pts[0][1] + (float) Math.sin(a1) * r, c);
+            }
         }
     }
 }
