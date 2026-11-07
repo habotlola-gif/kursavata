@@ -19,7 +19,8 @@ public class ConnectionMixin {
     )
     private void hatek$onSend(Packet<?> packet, ChannelFutureListener listener, boolean flush,
                               CallbackInfo ci) {
-        if (dev.hatek.client.module.impl.movement.AirStuck.blockPacket(packet)) {
+        if (dev.hatek.client.module.impl.movement.VoidTeleport.blockPacket(packet)
+                || dev.hatek.client.module.impl.movement.AirStuck.blockPacket(packet)) {
             ci.cancel();
             return;
         }

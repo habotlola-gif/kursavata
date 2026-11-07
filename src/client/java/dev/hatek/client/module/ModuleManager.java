@@ -7,6 +7,7 @@ import dev.hatek.client.module.impl.combat.AutoTotem;
 import dev.hatek.client.module.impl.combat.SuperSpear;
 import dev.hatek.client.module.impl.movement.AirStuck;
 import dev.hatek.client.module.impl.movement.DragonFly;
+import dev.hatek.client.module.impl.movement.VoidTeleport;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
@@ -87,6 +88,8 @@ public final class ModuleManager {
         MODULES.add(new SuperSpear());
 
         MODULES.add(new AirStuck());
+
+        MODULES.add(new VoidTeleport());
 
         MODULES.add(new DragonFly());
 
