@@ -20,6 +20,11 @@ public final class ClientEvents {
 
         ComponentManager.tick();
 
+        dev.hatek.client.module.impl.movement.AirStuck airStuck = dev.hatek.client.module.impl.movement.AirStuck.instance();
+        if (airStuck != null) {
+            airStuck.beforeTick(mc.player);
+        }
+
         for (Module module : ModuleManager.all()) {
             if (module instanceof NoJumpDelay jump) {
                 jump.onTick();
@@ -31,6 +36,17 @@ public final class ClientEvents {
         AttackAura aura = AttackAura.instance();
         if (aura != null) {
             aura.onTick();
+        }
+    }
+
+    public static void playerTickEnd() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return;
+        }
+        dev.hatek.client.module.impl.movement.AirStuck airStuck = dev.hatek.client.module.impl.movement.AirStuck.instance();
+        if (airStuck != null) {
+            airStuck.afterTick(mc.player);
         }
     }
 

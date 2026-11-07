@@ -14,10 +14,15 @@ public class ConnectionMixin {
     @Inject(
             method = "send(Lnet/minecraft/network/protocol/Packet;"
                     + "Lio/netty/channel/ChannelFutureListener;Z)V",
-            at = @At("HEAD")
+            at = @At("HEAD"),
+            cancellable = true
     )
     private void hatek$onSend(Packet<?> packet, ChannelFutureListener listener, boolean flush,
                               CallbackInfo ci) {
+        if (dev.hatek.client.module.impl.movement.AirStuck.blockPacket(packet)) {
+            ci.cancel();
+            return;
+        }
         ComponentManager.packetSent(packet);
     }
 }

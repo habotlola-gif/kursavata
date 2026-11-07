@@ -13,4 +13,9 @@ public class LocalPlayerMixin {
     private void hatek$onPlayerTick(CallbackInfo ci) {
         ClientEvents.playerTick();
     }
+
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void hatek$onPlayerTickEnd(CallbackInfo ci) {
+        ClientEvents.playerTickEnd();
+    }
 }
