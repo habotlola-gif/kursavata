@@ -36,7 +36,7 @@ public final class SpearRush extends Module {
     private final SliderSetting aimSpeed = new SliderSetting("Aim speed (%)", 100.0, 10.0, 100.0, 5.0);
     private final BoolSetting useDragonFly = new BoolSetting("Use DragonFly (switch it on, take the faster speed)", true);
     private final BoolSetting onlyFlying = new BoolSetting("Only while flying", true);
-    private final BoolSetting stopAfter = new BoolSetting("Stop after the pierce", true);
+    private final BoolSetting stopAfter = new BoolSetting("Stop after the pierce or attempt", true);
 
     private LivingEntity target;
     private boolean finished;        // this charge is used up; wait for the button to be released
@@ -129,6 +129,9 @@ public final class SpearRush extends Module {
             if (this.target != null && !this.finished) {
                 this.lowestHealth = Math.min(this.lowestHealth, healthOf(this.target));
                 reportResult();                      // the charge was released in the middle of the rush
+                if (this.stopAfter.value() && player.isAlive()) {
+                    player.setDeltaMovement(Vec3.ZERO);      // the attempt is over: stop
+                }
             }
             reset(false);
             return;
@@ -139,6 +142,10 @@ public final class SpearRush extends Module {
         if (this.target == null || !this.target.isAlive() || this.target.level() != player.level()) {
             if (this.target != null && !this.target.isAlive()) {
                 reportResult();                      // the target died mid-rush
+                if (this.stopAfter.value()) {
+                    player.setDeltaMovement(Vec3.ZERO);
+                    this.active = true;
+                }
                 reset(true);
                 return;
             }
