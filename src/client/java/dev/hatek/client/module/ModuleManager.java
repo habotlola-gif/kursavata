@@ -6,6 +6,7 @@ import dev.hatek.client.module.impl.movement.AirStuck;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
+import dev.hatek.client.module.impl.render.ShaderEsp;
 import dev.hatek.client.module.impl.render.SwingAnimations;
 import dev.hatek.client.module.impl.render.TargetEsp;
 import dev.hatek.client.module.setting.BoolSetting;
@@ -68,6 +69,8 @@ public final class ModuleManager {
         MODULES.add(new AutoSprint().enabled(true).expanded(true));
 
         MODULES.add(new AirStuck());
+
+        MODULES.add(new ShaderEsp());
 
         MODULES.add(new SwingAnimations());
 
