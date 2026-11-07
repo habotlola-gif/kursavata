@@ -25,7 +25,7 @@ import java.util.Locale;
  * One rush per charge: release the right mouse button and charge again to rush again.
  */
 public final class SpearRush extends Module {
-    private static final int PASS_TICKS = 8;
+    private static final int PASS_TICKS = 4;
 
     private static SpearRush instance;
 
@@ -36,6 +36,7 @@ public final class SpearRush extends Module {
     private final SliderSetting aimSpeed = new SliderSetting("Aim speed (%)", 100.0, 10.0, 100.0, 5.0);
     private final BoolSetting useDragonFly = new BoolSetting("Use DragonFly (switch it on, take the faster speed)", true);
     private final BoolSetting onlyFlying = new BoolSetting("Only while flying", true);
+    private final BoolSetting stopAfter = new BoolSetting("Stop after the pierce", true);
 
     private LivingEntity target;
     private boolean finished;        // this charge is used up; wait for the button to be released
@@ -51,7 +52,7 @@ public final class SpearRush extends Module {
     public SpearRush() {
         super("SpearRush", "Auto-aim and accelerate into a player on DragonFly while charging a spear", Category.COMBAT);
         instance = this;
-        with(this.speed, this.acceleration, this.range, this.cone, this.aimSpeed, this.useDragonFly, this.onlyFlying);
+        with(this.speed, this.acceleration, this.range, this.cone, this.aimSpeed, this.useDragonFly, this.onlyFlying, this.stopAfter);
     }
 
     public static SpearRush instance() {
@@ -171,12 +172,19 @@ public final class SpearRush extends Module {
 
         if (this.passing) {
             // through the target and on, straight, with the speed it had
-            player.setDeltaMovement(this.passDirection.scale(this.currentSpeed));
-            this.active = true;
-            if (++this.passTicks > PASS_TICKS) {
+            boolean hitSeen = healthOf(this.target) < this.startHealth - 0.01f;
+            if (++this.passTicks > PASS_TICKS || (hitSeen && this.passTicks > 1)) {
+                // pierced: stop dead (the speed is not carried on past the target)
+                if (this.stopAfter.value()) {
+                    player.setDeltaMovement(Vec3.ZERO);
+                    this.active = true;
+                }
                 reportResult();
                 reset(true);
+                return;
             }
+            player.setDeltaMovement(this.passDirection.scale(this.currentSpeed));
+            this.active = true;
             return;
         }
 
