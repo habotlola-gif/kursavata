@@ -38,6 +38,7 @@ public final class VoidTeleport extends Module {
     private final TextSetting yText = new TextSetting("Y", "", "empty = where you stand");
     private final TextSetting zText = new TextSetting("Z", "", "empty = where you stand");
 
+    private Vec3 pending;
     private volatile Stage stage = Stage.IDLE;
     private volatile boolean rolledBack;
     private Vec3 position = Vec3.ZERO;
@@ -91,6 +92,20 @@ public final class VoidTeleport extends Module {
         }
     }
 
+    /** Starts a trip to the given point (used by the .tp command). */
+    public void teleportTo(Vec3 point) {
+        if (this.stage != Stage.IDLE) {
+            message("Телепорт уже идёт.");
+            return;
+        }
+        this.pending = point;
+        if (isEnabled()) {
+            onEnable();
+        } else {
+            setEnabled(true);
+        }
+    }
+
     @Override
     protected void onEnable() {
         Minecraft mc = Minecraft.getInstance();
@@ -100,8 +115,11 @@ public final class VoidTeleport extends Module {
             setEnabled(false);
             return;
         }
-        if (!start(player, level, parse(this.xText.value(), player.getX()), parse(this.yText.value(), player.getY()),
-                parse(this.zText.value(), player.getZ()))) {
+        Vec3 point = this.pending != null ? this.pending
+                : new Vec3(parse(this.xText.value(), player.getX()), parse(this.yText.value(), player.getY()),
+                parse(this.zText.value(), player.getZ()));
+        this.pending = null;
+        if (!start(player, level, point.x, point.y, point.z)) {
             setEnabled(false);
         }
     }

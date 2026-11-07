@@ -5,6 +5,7 @@ import net.minecraft.client.gui.screens.ChatScreen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ChatScreen.class)
@@ -15,6 +16,14 @@ public abstract class ChatScreenMixin {
         ViewModel viewModel = ViewModel.instance();
         if (viewModel != null && viewModel.onScroll(mouseX, mouseY, scrollY)) {
             cir.setReturnValue(true);
+        }
+    }
+
+    /** Lines that start with a dot are client commands (.tp ник): handled here and not sent to the server. */
+    @Inject(method = "handleChatInput", at = @At("HEAD"), cancellable = true)
+    private void hatek$command(String text, boolean addToHistory, CallbackInfo ci) {
+        if (dev.hatek.client.feature.command.Commands.handle(text)) {
+            ci.cancel();
         }
     }
 }
