@@ -50,9 +50,14 @@ public class HatekClient implements ClientModInitializer {
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
                 Identifier.fromNamespaceAndPath(MOD_ID, "interface"),
                 (graphics, delta) -> {
+                    dev.hatek.client.module.impl.render.hud.DragHandle.beginFrame();
                     dev.hatek.client.module.impl.render.Interface hud = dev.hatek.client.module.impl.render.Interface.instance();
                     if (hud != null) {
                         hud.render(graphics, delta);
+                    }
+                    dev.hatek.client.module.impl.render.ViewModel viewModel = dev.hatek.client.module.impl.render.ViewModel.instance();
+                    if (viewModel != null) {
+                        viewModel.renderEditor(graphics);
                     }
                 });
 

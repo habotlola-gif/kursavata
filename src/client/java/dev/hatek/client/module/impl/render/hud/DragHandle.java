@@ -10,7 +10,21 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import org.lwjgl.glfw.GLFW;
 
 /** Drag-with-the-mouse behaviour shared by the HUD cards; active only while the chat is open. */
-final class DragHandle {
+public final class DragHandle {
+    private static boolean cardHover;
+    private static boolean cardDragging;
+
+    /** Call once per HUD frame before the cards are drawn. */
+    public static void beginFrame() {
+        cardHover = false;
+        cardDragging = false;
+    }
+
+    /** True when a card is under the mouse or being dragged this frame (other mouse tools must stay out of the way). */
+    public static boolean cardsBusy() {
+        return cardHover || cardDragging;
+    }
+
     private boolean dragging;
     private boolean mouseWasDown;
     private double grabX;
@@ -40,6 +54,9 @@ final class DragHandle {
         double mx = Render2D.mouseX();
         double my = Render2D.mouseY();
         boolean down = GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+        if (Render2D.hovered(mx, my, x, y, w, h)) {
+            cardHover = true;
+        }
         if (down && !this.mouseWasDown && Render2D.hovered(mx, my, x, y, w, h)) {
             this.dragging = true;
             this.grabX = mx - x;
@@ -54,6 +71,9 @@ final class DragHandle {
             double nx = freeW > 1.0 ? (mx - this.grabX) / freeW * 100.0 : pos.x();
             double ny = freeH > 1.0 ? (my - this.grabY) / freeH * 100.0 : pos.y();
             pos.set(nx, ny);
+        }
+        if (this.dragging) {
+            cardDragging = true;
         }
         this.mouseWasDown = down;
     }

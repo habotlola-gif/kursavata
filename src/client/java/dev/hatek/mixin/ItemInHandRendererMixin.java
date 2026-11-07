@@ -3,6 +3,8 @@ package dev.hatek.mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.hatek.client.module.impl.render.SwingAnimations;
+import dev.hatek.client.module.impl.render.ViewModel;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.world.entity.HumanoidArm;
 import org.spongepowered.asm.mixin.Mixin;
@@ -33,5 +35,23 @@ public abstract class ItemInHandRendererMixin {
     private float hatek$noEquipDip(float equipProgress) {
         SwingAnimations animations = SwingAnimations.instance();
         return animations != null && animations.skipEquipDip() ? 0.0f : equipProgress;
+    }
+
+    @Inject(method = "applyItemArmTransform", at = @At("TAIL"))
+    private void hatek$handOffset(PoseStack pose, HumanoidArm arm, float equipProgress, CallbackInfo ci) {
+        ViewModel viewModel = ViewModel.instance();
+        if (viewModel != null) {
+            viewModel.apply(pose, arm);
+        }
+    }
+
+    @Inject(method = "renderPlayerArm", at = @At(value = "INVOKE",
+            target = "Lcom/mojang/blaze3d/vertex/PoseStack;translate(FFF)V", ordinal = 0, shift = At.Shift.AFTER))
+    private void hatek$emptyHandOffset(PoseStack pose, SubmitNodeCollector collector, int light, float equipProgress,
+                                       float swingProgress, HumanoidArm arm, CallbackInfo ci) {
+        ViewModel viewModel = ViewModel.instance();
+        if (viewModel != null) {
+            viewModel.apply(pose, arm);
+        }
     }
 }
