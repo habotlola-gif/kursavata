@@ -2,6 +2,7 @@ package dev.hatek.client.module.impl.combat;
 
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
+import dev.hatek.client.module.impl.movement.DragonFly;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import net.minecraft.client.Minecraft;
@@ -13,14 +14,18 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.Locale;
+
 /**
  * SpearRush: while you fly and charge a spear (right mouse held), the module picks the player closest to where you
- * are looking, aims at them for you and accelerates you toward them through flight, faster every tick up to the top
- * speed. The spear's charge damage grows with the speed you move at (the server measures it from your movement), so a
- * long, fast approach hits very hard. One rush per charge: release the right mouse button and charge again to rush again.
+ * are looking, aims at them for you and accelerates you toward them on the DragonFly flight (DragonFly is switched on
+ * for you and its Speed is the top speed). The spear's charge damage grows with the speed you move at (the server
+ * measures it from your movement). To make the hit register every time, the last step before the target is shortened
+ * to land exactly in the target's middle, and then the rush goes on straight through it with the speed it had.
+ * One rush per charge: release the right mouse button and charge again to rush again.
  */
 public final class SpearRush extends Module {
-    private static final int POST_CONTACT_TICKS = 10;
+    private static final int PASS_TICKS = 8;
 
     private static SpearRush instance;
 
@@ -29,30 +34,33 @@ public final class SpearRush extends Module {
     private final SliderSetting range = new SliderSetting("Range (blocks)", 80.0, 10.0, 120.0, 1.0);
     private final SliderSetting cone = new SliderSetting("Target search cone (degrees)", 60.0, 5.0, 180.0, 5.0);
     private final SliderSetting aimSpeed = new SliderSetting("Aim speed (%)", 100.0, 10.0, 100.0, 5.0);
+    private final BoolSetting useDragonFly = new BoolSetting("Use DragonFly (its speed)", true);
     private final BoolSetting onlyFlying = new BoolSetting("Only while flying", true);
 
     private LivingEntity target;
     private boolean finished;        // this charge is used up; wait for the button to be released
     private double currentSpeed;
-    private int contactTicks;
+    private boolean passing;         // the target middle was reached: keep going straight through it
+    private Vec3 passDirection = Vec3.ZERO;
+    private int passTicks;
     private float startHealth;       // target health when it was locked (with absorption)
     private float lowestHealth;      // the lowest health seen since: a drop means the server registered the hit
     private boolean noTargetNotified;
     private boolean active;          // true on a tick where the rush is steering the player
 
-    /** True while SpearRush is steering the player (DragonFly must not overwrite the momentum then). */
-    public static boolean isActive() {
-        return instance != null && instance.active;
-    }
-
     public SpearRush() {
-        super("SpearRush", "Auto-aim and accelerate into a player while charging a spear in flight", Category.COMBAT);
+        super("SpearRush", "Auto-aim and accelerate into a player on DragonFly while charging a spear", Category.COMBAT);
         instance = this;
-        with(this.speed, this.acceleration, this.range, this.cone, this.aimSpeed, this.onlyFlying);
+        with(this.speed, this.acceleration, this.range, this.cone, this.aimSpeed, this.useDragonFly, this.onlyFlying);
     }
 
     public static SpearRush instance() {
         return instance;
+    }
+
+    /** True while SpearRush is steering the player (DragonFly and the keys must not fight its momentum). */
+    public static boolean isActive() {
+        return instance != null && instance.active;
     }
 
     @Override
@@ -86,7 +94,7 @@ public final class SpearRush extends Module {
         if (!this.target.isAlive() || healthOf(this.target) <= 0.0f) {
             message("§aУдар от сервера был: " + name + " убит");
         } else if (lost > 0.01f) {
-            message(String.format(java.util.Locale.ROOT, "§aУдар от сервера был: %s потерял %.1f хп", name, lost));
+            message(String.format(Locale.ROOT, "§aУдар от сервера был: %s потерял %.1f хп", name, lost));
         } else {
             message("§cУдара от сервера не было: " + name + " не получил урон");
         }
@@ -96,11 +104,17 @@ public final class SpearRush extends Module {
         this.noTargetNotified = false;
         this.target = null;
         this.currentSpeed = 0.0;
-        this.contactTicks = 0;
+        this.passing = false;
+        this.passTicks = 0;
         this.finished = finishedCharge;
     }
 
-    /** Start of LocalPlayer.tick. */
+    private double topSpeed() {
+        DragonFly fly = DragonFly.instance();
+        return this.useDragonFly.value() && fly != null && fly.isEnabled() ? fly.speedValue() : this.speed.value();
+    }
+
+    /** Start of LocalPlayer.tick (after DragonFly). */
     public void beforeTick(LocalPlayer player) {
         this.active = false;
         if (!isEnabled()) {
@@ -121,7 +135,7 @@ public final class SpearRush extends Module {
         }
         if (this.target == null || !this.target.isAlive() || this.target.level() != player.level()) {
             if (this.target != null && !this.target.isAlive()) {
-                reportResult();                          // the target died mid-rush
+                reportResult();                      // the target died mid-rush
                 reset(true);
                 return;
             }
@@ -133,17 +147,34 @@ public final class SpearRush extends Module {
                 }
                 return;
             }
+            DragonFly fly = DragonFly.instance();
+            if (this.useDragonFly.value() && fly != null && !fly.isEnabled()) {
+                fly.setEnabled(true);
+                message("§eВключил DragonFly для разгона");
+            }
             this.currentSpeed = 0.0;
-            this.contactTicks = 0;
+            this.passing = false;
+            this.passTicks = 0;
             this.startHealth = healthOf(this.target);
             this.lowestHealth = this.startHealth;
-            message(String.format(java.util.Locale.ROOT, "§aНашёл цель: %s (%.0f бл.), атакую",
+            message(String.format(Locale.ROOT, "§aНашёл цель: %s (%.0f бл.), атакую",
                     this.target.getName().getString(), this.target.distanceTo(player)));
         }
         this.lowestHealth = Math.min(this.lowestHealth, healthOf(this.target));
-        if (this.contactTicks > POST_CONTACT_TICKS) {
-            reportResult();
-            reset(true);
+
+        double top = topSpeed();
+        // start from the speed you already have, then speed up every tick up to the top speed
+        double horizontalNow = Math.hypot(player.getDeltaMovement().x, player.getDeltaMovement().z);
+        this.currentSpeed = Math.min(top, Math.max(this.currentSpeed, Math.max(0.3, horizontalNow)) + this.acceleration.value());
+
+        if (this.passing) {
+            // through the target and on, straight, with the speed it had
+            player.setDeltaMovement(this.passDirection.scale(this.currentSpeed));
+            this.active = true;
+            if (++this.passTicks > PASS_TICKS) {
+                reportResult();
+                reset(true);
+            }
             return;
         }
 
@@ -155,14 +186,17 @@ public final class SpearRush extends Module {
         player.setYRot(player.getYRot() + Mth.wrapDegrees(wantYaw - player.getYRot()) * k);
         player.setXRot(player.getXRot() + (wantPitch - player.getXRot()) * k);
 
-        if (toTarget.length() < 2.5) {
-            this.contactTicks++;
+        double distance = toTarget.length();
+        Vec3 direction = toTarget.normalize();
+        if (distance <= this.currentSpeed + 0.3) {
+            // last step: land exactly in the middle of the target so the server sees us inside it, then go through
+            player.setDeltaMovement(direction.scale(distance));
+            this.passing = true;
+            this.passDirection = direction;
+            this.passTicks = 0;
+        } else {
+            player.setDeltaMovement(direction.scale(this.currentSpeed));
         }
-        // start from the speed you already have, then speed up every tick up to the top speed
-        double horizontalNow = Math.hypot(player.getDeltaMovement().x, player.getDeltaMovement().z);
-        this.currentSpeed = Math.min(this.speed.value(),
-                Math.max(this.currentSpeed, Math.max(0.3, horizontalNow)) + this.acceleration.value());
-        player.setDeltaMovement(toTarget.normalize().scale(this.currentSpeed));
         this.active = true;
     }
 

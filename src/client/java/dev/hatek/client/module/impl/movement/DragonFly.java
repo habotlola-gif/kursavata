@@ -30,6 +30,11 @@ public final class DragonFly extends Module {
         return instance;
     }
 
+    /** The Speed setting, in blocks per tick. */
+    public double speedValue() {
+        return this.speed.value();
+    }
+
     /** Start of LocalPlayer.tick, before the movement of this tick is calculated. */
     public void beforeTick(LocalPlayer player) {
         if (!isEnabled()) {
