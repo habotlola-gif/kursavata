@@ -26,7 +26,7 @@ public final class SoulsEsp {
         double height = entity.getBbHeight();
         double radius = Math.max(0.75, entity.getBbWidth() * 1.3) * sizeMul;
         double trailSeconds = 0.6 * trailMul;
-        double worldSize = 0.2 * thicknessMul;
+        double worldSize = 0.055 * thicknessMul;           // head width in blocks (a thin comet, not a band)
         double fov = Math.toRadians(mc.options.fov().get());
         double pixelsPerUnit = Render2D.screenHeight() / (2.0 * Math.tan(fov / 2.0));
 
@@ -46,10 +46,10 @@ public final class SoulsEsp {
                 }
                 double distance = Math.max(0.3, point.distanceTo(camera));
                 double width = worldSize * pixelsPerUnit / distance * (0.10 + 0.90 * Math.pow(fade, 0.9));
-                pts[k] = new float[]{screen[0], screen[1], (float) Math.min(width, 120.0), fade};
+                pts[k] = new float[]{screen[0], screen[1], (float) Math.min(width, 30.0 * thicknessMul), fade};
             }
             if (glow > 0.0f) {
-                ribbon(gg, pts, 3.0f, glowColor, 0.30f * glow * visibility);
+                ribbon(gg, pts, 2.2f, glowColor, 0.22f * glow * visibility);
             }
             ribbon(gg, pts, 1.0f, coreColor, 0.95f * visibility);
 
