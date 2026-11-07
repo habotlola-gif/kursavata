@@ -4,40 +4,32 @@ import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.SliderSetting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.tags.ItemTags;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * SpearRush: the module is on and waits. While you are flying and charging a spear (right mouse held) and a player is
- * in the direction you are aiming, it launches you through that player at high speed and keeps the aim on them. The
- * spear's charge damage grows with the speed you move at (the server measures it from your movement), so the rush
- * hits very hard. One rush per charge: release the right mouse button and charge again to rush again.
+ * SpearRush: while you fly and charge a spear (right mouse held), the module accelerates you along the direction you
+ * are aiming, faster and faster up to the chosen speed. You aim, the flight does the speeding up. The spear's charge
+ * damage grows with the speed you move at (the server measures it from your movement), so a long, fast approach
+ * hits very hard. Releasing the right mouse button ends the acceleration.
  */
 public final class SpearRush extends Module {
-    private static final int POST_CONTACT_TICKS = 10;
-
     private static SpearRush instance;
 
-    private final SliderSetting range = new SliderSetting("Range (blocks)", 60.0, 10.0, 100.0, 1.0);
-    private final SliderSetting cone = new SliderSetting("Aim cone (degrees)", 12.0, 2.0, 45.0, 1.0);
-    private final SliderSetting speed = new SliderSetting("Speed (blocks/tick)", 2.0, 0.5, 5.0, 0.1);
-    private final SliderSetting maxTicks = new SliderSetting("Max rush (ticks)", 40.0, 10.0, 120.0, 5.0);
+    private final SliderSetting speed = new SliderSetting("Top speed (blocks/tick)", 2.0, 0.5, 5.0, 0.1);
+    private final SliderSetting acceleration = new SliderSetting("Acceleration (blocks/tick per tick)", 0.15, 0.02, 1.0, 0.01);
     private final BoolSetting onlyFlying = new BoolSetting("Only while flying", true);
-    private final BoolSetting correctAim = new BoolSetting("Keep aim on target", true);
+    private final BoolSetting aimAssist = new BoolSetting("Aim assist (small)", false);
 
-    private LivingEntity target;
-    private boolean rushing;
-    private boolean finished;     // this charge is used up; wait for the button to be released
-    private int ticks;
-    private int contactTicks;
+    private double currentSpeed;
 
     public SpearRush() {
-        super("SpearRush", "Rush through the player you aim at with a charged spear while flying", Category.COMBAT);
+        super("SpearRush", "Accelerate along your aim while charging a spear in flight", Category.COMBAT);
         instance = this;
-        with(this.range, this.cone, this.speed, this.maxTicks, this.onlyFlying, this.correctAim);
+        with(this.speed, this.acceleration, this.onlyFlying, this.aimAssist);
     }
 
     public static SpearRush instance() {
@@ -45,21 +37,8 @@ public final class SpearRush extends Module {
     }
 
     @Override
-    protected void onEnable() {
-        stop(false);
-    }
-
-    @Override
     protected void onDisable() {
-        stop(false);
-    }
-
-    private void stop(boolean finishedCharge) {
-        this.rushing = false;
-        this.target = null;
-        this.ticks = 0;
-        this.contactTicks = 0;
-        this.finished = finishedCharge;
+        this.currentSpeed = 0.0;
     }
 
     /** Start of LocalPlayer.tick. */
@@ -70,67 +49,52 @@ public final class SpearRush extends Module {
         boolean charging = player.isUsingItem() && player.getUseItem().is(ItemTags.SPEARS);
         boolean mayRush = !this.onlyFlying.value() || player.getAbilities().flying;
         if (!charging || !mayRush || !player.isAlive()) {
-            stop(false);
+            this.currentSpeed = 0.0;
             return;
         }
-        if (this.finished) {
-            return;
+        if (this.aimAssist.value()) {
+            assistAim(player);
         }
-        if (!this.rushing) {
-            this.target = findAimedTarget(player);
-            if (this.target == null) {
-                return;
-            }
-            this.rushing = true;
-            this.ticks = 0;
-            this.contactTicks = 0;
-        }
-        if (!this.target.isAlive() || this.target.level() != player.level()
-                || ++this.ticks > Math.round(this.maxTicks.value()) || this.contactTicks > POST_CONTACT_TICKS) {
-            stop(true);
-            return;
-        }
-
-        Vec3 aim = this.target.getBoundingBox().getCenter();
-        Vec3 toTarget = aim.subtract(player.getEyePosition());
-        if (this.correctAim.value()) {
-            double horizontal = Math.hypot(toTarget.x, toTarget.z);
-            player.setYRot((float) (Math.toDegrees(Math.atan2(toTarget.z, toTarget.x)) - 90.0));
-            player.setXRot((float) -Math.toDegrees(Math.atan2(toTarget.y, horizontal)));
-        }
-        if (toTarget.length() < 2.5) {
-            this.contactTicks++;
-        }
-        player.setDeltaMovement(toTarget.normalize().scale(this.speed.value()));
+        // start from the speed you already have, then speed up every tick up to the top speed
+        double horizontalNow = Math.hypot(player.getDeltaMovement().x, player.getDeltaMovement().z);
+        this.currentSpeed = Math.min(this.speed.value(),
+                Math.max(this.currentSpeed, Math.max(0.3, horizontalNow)) + this.acceleration.value());
+        player.setDeltaMovement(player.getLookAngle().normalize().scale(this.currentSpeed));
     }
 
-    /** The player closest to the line of sight (within the aim cone and the range). */
-    private LivingEntity findAimedTarget(LocalPlayer player) {
-        var mc = net.minecraft.client.Minecraft.getInstance();
+    /** Pulls the aim a little toward a player who is already almost in the crosshair (within about 8 degrees). */
+    private void assistAim(LocalPlayer player) {
+        Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) {
-            return null;
+            return;
         }
         Vec3 eye = player.getEyePosition();
         Vec3 look = player.getLookAngle();
-        double maxRange = this.range.value();
-        double maxAngle = this.cone.value();
-        LivingEntity best = null;
-        double bestAngle = Double.MAX_VALUE;
+        Vec3 best = null;
+        double bestAngle = 8.0;
         for (Player other : mc.level.players()) {
             if (other == player || other.isSpectator() || !other.isAlive()) {
                 continue;
             }
             Vec3 to = other.getBoundingBox().getCenter().subtract(eye);
             double distance = to.length();
-            if (distance > maxRange || distance < 0.5) {
+            if (distance < 0.5 || distance > 100.0) {
                 continue;
             }
             double angle = Math.toDegrees(Math.acos(Math.max(-1.0, Math.min(1.0, look.dot(to.normalize())))));
-            if (angle <= maxAngle && angle < bestAngle) {
+            if (angle < bestAngle) {
                 bestAngle = angle;
-                best = other;
+                best = to;
             }
         }
-        return best;
+        if (best == null) {
+            return;
+        }
+        double horizontal = Math.hypot(best.x, best.z);
+        float wantYaw = (float) (Math.toDegrees(Math.atan2(best.z, best.x)) - 90.0);
+        float wantPitch = (float) -Math.toDegrees(Math.atan2(best.y, horizontal));
+        float dYaw = net.minecraft.util.Mth.wrapDegrees(wantYaw - player.getYRot());
+        player.setYRot(player.getYRot() + dYaw * 0.35f);
+        player.setXRot(player.getXRot() + (wantPitch - player.getXRot()) * 0.35f);
     }
 }
