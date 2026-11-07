@@ -11,6 +11,7 @@ import dev.hatek.client.module.impl.render.ShaderEsp;
 import dev.hatek.client.module.impl.render.ShaderHands;
 import dev.hatek.client.module.impl.render.SwingAnimations;
 import dev.hatek.client.module.impl.render.TargetEsp;
+import dev.hatek.client.module.impl.render.TargetHud;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ButtonSetting;
 import dev.hatek.client.module.setting.ColorSetting;
@@ -81,6 +82,8 @@ public final class ModuleManager {
         MODULES.add(new SwingAnimations());
 
         MODULES.add(new TargetEsp());
+
+        MODULES.add(new TargetHud());
 
         MODULES.add(new NoJumpDelay());
 
