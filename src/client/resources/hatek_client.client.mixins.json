@@ -8,6 +8,7 @@
     "ChatScreenMixin",
     "ClientClockManagerMixin",
     "ClientPacketListenerMixin",
+    "CommandSuggestionsMixin",
     "ConnectionMixin",
     "EntityRendererMixin",
     "GameRendererMixin",

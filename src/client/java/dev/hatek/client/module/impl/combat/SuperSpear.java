@@ -1,5 +1,6 @@
 package dev.hatek.client.module.impl.combat;
 
+import dev.hatek.client.feature.command.Friends;
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.impl.movement.DragonFly;
@@ -323,7 +324,7 @@ public final class SuperSpear extends Module {
     }
 
     /** True when a straight line from the eyes reaches the head, the middle or the feet of the entity without a block. */
-    private static boolean canSee(LocalPlayer player, LivingEntity entity) {
+    public static boolean canSee(LocalPlayer player, LivingEntity entity) {
         Minecraft mc = Minecraft.getInstance();
         Vec3 eye = player.getEyePosition();
         AABB box = entity.getBoundingBox();
@@ -395,6 +396,9 @@ public final class SuperSpear extends Module {
             Vec3 to = other.getBoundingBox().getCenter().subtract(eye);
             double distance = to.length();
             if (distance > maxRange || distance < 0.5) {
+                continue;
+            }
+            if (Friends.is(other)) {
                 continue;
             }
             if (this.visibleOnly.value() && !canSee(player, other)) {

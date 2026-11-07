@@ -470,7 +470,7 @@ public final class AttackAura extends Module {
 
     private boolean isAllowedTarget(LivingEntity entity) {
         Minecraft mc = mc();
-        if (entity instanceof LocalPlayer) {
+        if (entity instanceof LocalPlayer || dev.hatek.client.feature.command.Friends.is(entity)) {
             return false;
         }
         if (!misc(THROUGH_WALLS) && !mc.player.hasLineOfSight(entity)) {
