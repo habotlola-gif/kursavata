@@ -21,8 +21,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Locale;
 
 /**
- * SuperSpear: turn the module on (its own key, a keyboard key or a side mouse button such as MOUSE 4), then click the
- * left mouse button with a spear in hand while aiming near a player. The module marks the player nearest to your
+ * SuperSpear: turn the module on (its own key, a keyboard key or a side mouse button such as MOUSE 4), then press the
+ * right mouse button with a spear in hand while aiming near a player. The module marks the player nearest to your
  * crosshair, charges the spear (it only starts to hurt after its charge delay), then rushes through the mark at high
  * speed and checks in the chat whether the server registered the hit.
  *
@@ -61,7 +61,7 @@ public final class SuperSpear extends Module {
     private boolean active;          // true on a tick where the module steers the player
 
     public SuperSpear() {
-        super("SuperSpear", "Left click aimed at a player: mark, charge the spear, rush through", Category.COMBAT);
+        super("SuperSpear", "Right click with a spear aimed at a player: mark, charge, rush through", Category.COMBAT);
         instance = this;
         with(this.onlyWithSpear, this.speed, this.acceleration, this.range, this.cone, this.useDragonFly,
                 this.stabOnContact, this.stopAfter);
@@ -120,8 +120,8 @@ public final class SuperSpear extends Module {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
-        // the trigger is a left click (attack) with the module on, aimed near a player
-        boolean down = mc.options.keyAttack.isDown();
+        // the trigger is a right click (use) with the module on, aimed near a player
+        boolean down = mc.options.keyUse.isDown();
         boolean pressed = down && !this.keyWas && mc.gui.screen() == null;
         this.keyWas = down;
 
