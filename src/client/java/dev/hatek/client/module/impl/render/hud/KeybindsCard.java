@@ -1,9 +1,11 @@
-package dev.hatek.client.module.impl.render;
+package dev.hatek.client.module.impl.render.hud;
+
+import dev.hatek.client.module.impl.render.Interface;
+import dev.hatek.client.module.setting.PositionSetting;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.ModuleManager;
-import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
 import dev.hatek.client.ui.render.Render2D;
@@ -19,31 +21,21 @@ import java.util.Locale;
  * Show "All bound": every bound module, disabled ones dimmed. Show "Only enabled": disabled modules are hidden,
  * and rows slide in and out as modules are toggled while the card grows and shrinks.
  */
-public final class KeybindsHud extends PanelHud<KeybindsHud.Bind> {
+public final class KeybindsCard extends HudCard<KeybindsCard.Bind> {
     private static final int MAX_ROWS = 12;
     private static final int ACCENT = 0xFFB3A8F0;
     private static final int KEY = 0xFF9D93E6;
     private static final int BAR = 0xFF3A3456;
 
-    private static KeybindsHud instance;
-
-    private final ModeSetting show = new ModeSetting("Show", 0, "All bound", "Only enabled");
-
-    public record Bind(String name, String key, boolean on) implements PanelHud.Row {
+    public record Bind(String name, String key, boolean on) implements HudCard.Row {
         @Override
         public String id() {
             return this.name;
         }
     }
 
-    public KeybindsHud() {
-        super("KeybindsHUD", "Card listing the modules with a bound key", 1.5, 30.0);
-        instance = this;
-        with(this.show);
-    }
-
-    public static KeybindsHud instance() {
-        return instance;
+    public KeybindsCard(Interface owner, PositionSetting position) {
+        super(owner, Interface.KEYBINDS, position);
     }
 
     @Override
@@ -58,11 +50,11 @@ public final class KeybindsHud extends PanelHud<KeybindsHud.Bind> {
 
     @Override
     protected List<Bind> currentRows() {
-        boolean onlyEnabled = this.show.is("Only enabled");
+        boolean onlyEnabled = this.owner.onlyEnabledBinds();
         List<Bind> out = new ArrayList<>();
         for (Module module : ModuleManager.all()) {
             int key = module.keyCode();
-            if (key == GLFW.GLFW_KEY_UNKNOWN || key < 0 || module == this) {
+            if (key == GLFW.GLFW_KEY_UNKNOWN || key < 0 || module == this.owner) {
                 continue;
             }
             if (onlyEnabled && !module.isEnabled()) {

@@ -48,24 +48,11 @@ public class HatekClient implements ClientModInitializer {
                 });
 
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
-                Identifier.fromNamespaceAndPath(MOD_ID, "target_hud"),
+                Identifier.fromNamespaceAndPath(MOD_ID, "interface"),
                 (graphics, delta) -> {
-                    dev.hatek.client.module.impl.render.TargetHud hud = dev.hatek.client.module.impl.render.TargetHud.instance();
+                    dev.hatek.client.module.impl.render.Interface hud = dev.hatek.client.module.impl.render.Interface.instance();
                     if (hud != null) {
                         hud.render(graphics, delta);
-                    }
-                });
-
-        HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
-                Identifier.fromNamespaceAndPath(MOD_ID, "panels"),
-                (graphics, delta) -> {
-                    dev.hatek.client.module.impl.render.PotionsHud potions = dev.hatek.client.module.impl.render.PotionsHud.instance();
-                    if (potions != null) {
-                        potions.render(graphics, delta);
-                    }
-                    dev.hatek.client.module.impl.render.KeybindsHud keybinds = dev.hatek.client.module.impl.render.KeybindsHud.instance();
-                    if (keybinds != null) {
-                        keybinds.render(graphics, delta);
                     }
                 });
 

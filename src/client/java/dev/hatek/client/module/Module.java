@@ -123,6 +123,9 @@ public class Module {
         }
         int height = Style.HEADER_H;
         for (Setting setting : this.settings) {
+            if (setting.hidden()) {
+                continue;
+            }
             height += Style.SETTING_GAP + setting.bottomOffset();
         }
         return height + Style.CARD_BOTTOM_PAD;
@@ -151,6 +154,9 @@ public class Module {
         Render2D.pushAlpha(Mth.clamp((progress - 0.25f) / 0.6f, 0.0f, 1.0f));
         float cursor = y + Style.HEADER_H;
         for (Setting setting : this.settings) {
+            if (setting.hidden()) {
+                continue;
+            }
             float baseline = cursor + Style.SETTING_GAP;
             setting.render(gg, x + Style.ROW_X, baseline, mx, my);
             cursor = baseline + setting.bottomOffset();
@@ -254,6 +260,9 @@ public class Module {
         if (this.expanded && this.expandAnim.get() > 0.5f) {
             float cursor = y + Style.HEADER_H;
             for (Setting setting : this.settings) {
+                if (setting.hidden()) {
+                    continue;
+                }
                 float baseline = cursor + Style.SETTING_GAP;
                 if (setting.mouseClicked(x + Style.ROW_X, baseline, mx, my, button)) {
                     return true;
@@ -278,6 +287,9 @@ public class Module {
         }
         float cursor = y + Style.HEADER_H;
         for (Setting setting : this.settings) {
+            if (setting.hidden()) {
+                continue;
+            }
             float baseline = cursor + Style.SETTING_GAP;
             setting.mouseDragged(x + Style.ROW_X, baseline, mx, my);
             cursor = baseline + setting.bottomOffset();

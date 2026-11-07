@@ -3,6 +3,7 @@ package dev.hatek.client.module.impl.render;
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.setting.BoolSetting;
+import dev.hatek.client.module.setting.MultiSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.render.Privilege;
 import dev.hatek.client.render.WorldProjection;
@@ -15,6 +16,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.PlayerFaceExtractor;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -31,6 +34,14 @@ public final class NameTags extends Module {
 
     private static final int BACKGROUND = 0xFF0D0D10;
 
+    public static final String LEFT_HAND = "Left hand";
+    public static final String RIGHT_HAND = "Right hand";
+    public static final String ARMOR = "Armor";
+
+    private static final EquipmentSlot[] ARMOR_SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+
+    private final MultiSetting items = new MultiSetting("Items above tag", List.of(LEFT_HAND, RIGHT_HAND, ARMOR),
+            LEFT_HAND, RIGHT_HAND, ARMOR);
     private final BoolSetting privilege = new BoolSetting("Show rank", true);
     private final BoolSetting throughWalls = new BoolSetting("Through walls", true);
     private final SliderSetting scale = new SliderSetting("Scale (%)", 100.0, 40.0, 200.0, 5.0);
@@ -41,7 +52,7 @@ public final class NameTags extends Module {
     public NameTags() {
         super("NameTags", "Name cards with face, rank and nick above players", Category.RENDER);
         instance = this;
-        with(this.privilege, this.throughWalls, this.scale, this.range);
+        with(this.items, this.privilege, this.throughWalls, this.scale, this.range);
     }
 
     public static NameTags instance() {
@@ -118,5 +129,54 @@ public final class NameTags extends Module {
             textX += rankWidth + 10.0f * s;
         }
         nickFont.draw(gg, nick, textX, baseline, 0xFFFFFFFF);
+
+        drawItems(gg, tag.player(), tag.x(), y, s);
+    }
+
+    /** Held items and armor in a small dark strip above the card: left hand, armor (head to feet), right hand. */
+    private void drawItems(GuiGraphicsExtractor gg, AbstractClientPlayer player, float centerX, float cardTop, float s) {
+        List<ItemStack> stacks = new ArrayList<>();
+        if (this.items.isSelected(LEFT_HAND)) {
+            addIfPresent(stacks, player.getItemBySlot(EquipmentSlot.OFFHAND));
+        }
+        if (this.items.isSelected(ARMOR)) {
+            for (EquipmentSlot slot : ARMOR_SLOTS) {
+                addIfPresent(stacks, player.getItemBySlot(slot));
+            }
+        }
+        if (this.items.isSelected(RIGHT_HAND)) {
+            addIfPresent(stacks, player.getItemBySlot(EquipmentSlot.MAINHAND));
+        }
+        if (stacks.isEmpty()) {
+            return;
+        }
+        float size = 22.0f * s;
+        float gap = 4.0f * s;
+        float pad = 6.0f * s;
+        float rowW = pad * 2.0f + stacks.size() * size + (stacks.size() - 1) * gap;
+        float rowH = size + pad * 2.0f;
+        float rowX = centerX - rowW / 2.0f;
+        float rowY = cardTop - rowH - 4.0f * s;
+        Render2D.round(gg, rowX, rowY, rowW, rowH, 10.0f * s, BACKGROUND);
+
+        Minecraft mc = Minecraft.getInstance();
+        float factor = size / 16.0f;
+        for (int i = 0; i < stacks.size(); i++) {
+            ItemStack stack = stacks.get(i);
+            float ix = rowX + pad + i * (size + gap);
+            float iy = rowY + pad;
+            gg.pose().pushMatrix();
+            gg.pose().translate(Math.round(ix), Math.round(iy));
+            gg.pose().scale(factor, factor);
+            gg.item(stack, 0, 0);
+            gg.itemDecorations(mc.font, stack, 0, 0);
+            gg.pose().popMatrix();
+        }
+    }
+
+    private static void addIfPresent(List<ItemStack> out, ItemStack stack) {
+        if (!stack.isEmpty()) {
+            out.add(stack);
+        }
     }
 }

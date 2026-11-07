@@ -15,6 +15,11 @@ public abstract class Setting {
         return this.name;
     }
 
+    /** Hidden settings are saved with configs but take no space in the menu. */
+    public boolean hidden() {
+        return false;
+    }
+
     public abstract float bottomOffset();
 
     public abstract void render(GuiGraphicsExtractor gg, float x, float baseline, double mx, double my);

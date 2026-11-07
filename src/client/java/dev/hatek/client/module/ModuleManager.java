@@ -7,15 +7,13 @@ import dev.hatek.client.module.impl.movement.AirStuck;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
-import dev.hatek.client.module.impl.render.KeybindsHud;
+import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.client.module.impl.render.NameTags;
-import dev.hatek.client.module.impl.render.PotionsHud;
 import dev.hatek.client.module.impl.render.Removals;
 import dev.hatek.client.module.impl.render.ShaderEsp;
 import dev.hatek.client.module.impl.render.ShaderHands;
 import dev.hatek.client.module.impl.render.SwingAnimations;
 import dev.hatek.client.module.impl.render.TargetEsp;
-import dev.hatek.client.module.impl.render.TargetHud;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ButtonSetting;
 import dev.hatek.client.module.setting.ColorSetting;
@@ -91,11 +89,9 @@ public final class ModuleManager {
 
         MODULES.add(new TargetEsp());
 
-        MODULES.add(new TargetHud());
+        MODULES.add(new Interface());
 
-        MODULES.add(new PotionsHud());
 
-        MODULES.add(new KeybindsHud());
 
         MODULES.add(new NoJumpDelay());
 

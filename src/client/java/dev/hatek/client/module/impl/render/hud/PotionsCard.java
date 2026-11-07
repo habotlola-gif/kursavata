@@ -1,4 +1,7 @@
-package dev.hatek.client.module.impl.render;
+package dev.hatek.client.module.impl.render.hud;
+
+import dev.hatek.client.module.impl.render.Interface;
+import dev.hatek.client.module.setting.PositionSetting;
 
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
@@ -13,28 +16,21 @@ import java.util.List;
 import java.util.Locale;
 
 /** Card listing the active potion effects with name, level and remaining time (design: potions-hud.svg). */
-public final class PotionsHud extends PanelHud<PotionsHud.Effect> {
+public final class PotionsCard extends HudCard<PotionsCard.Effect> {
     private static final int MAX_ROWS = 8;
     private static final int ACCENT = 0xFFB3A8F0;
     private static final int ACCENT_LIGHT = 0xFFE4DCFF;
     private static final int LEVEL = 0xFFA5A3B5;
 
-    private static PotionsHud instance;
-
-    public record Effect(String name, String level, String time) implements PanelHud.Row {
+    public record Effect(String name, String level, String time) implements HudCard.Row {
         @Override
         public String id() {
             return this.name;
         }
     }
 
-    public PotionsHud() {
-        super("PotionsHUD", "Card with your active potion effects", 1.5, 4.0);
-        instance = this;
-    }
-
-    public static PotionsHud instance() {
-        return instance;
+    public PotionsCard(Interface owner, PositionSetting position) {
+        super(owner, Interface.POTIONS, position);
     }
 
     @Override

@@ -1,9 +1,7 @@
-package dev.hatek.client.module.impl.render;
+package dev.hatek.client.module.impl.render.hud;
 
-import dev.hatek.client.module.Category;
-import dev.hatek.client.module.Module;
-import dev.hatek.client.module.setting.SliderSetting;
-import dev.hatek.client.ui.Style;
+import dev.hatek.client.module.impl.render.Interface;
+import dev.hatek.client.module.setting.PositionSetting;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
 import dev.hatek.client.ui.render.Render2D;
@@ -11,19 +9,17 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.ChatScreen;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
 /**
- * Base for list-style HUD cards (Potions, Keybinds): a dark rounded card whose height follows the number of rows
+ * Base for list-style cards (Potions, Keybinds): a dark rounded card whose height follows the number of rows
  * (55 + 29 * rows design pixels). Rows fade in/out and slide into place, and the card smoothly grows and shrinks.
- * The card scales with the screen height and can be dragged with the mouse while the chat is open
- * (position kept in the Position X/Y settings).
+ * Dragged with the mouse while the chat is open.
  */
-public abstract class PanelHud<R extends PanelHud.Row> extends Module {
+public abstract class HudCard<R extends HudCard.Row> {
     protected static final int BACKGROUND = 0xFF0D0D10;
     private static final float ROW_PITCH = 29.0f;
 
@@ -46,37 +42,27 @@ public abstract class PanelHud<R extends PanelHud.Row> extends Module {
         }
     }
 
-    protected final SliderSetting scale = new SliderSetting("Scale (%)", 100.0, 50.0, 200.0, 5.0);
-    protected final SliderSetting posX;
-    protected final SliderSetting posY;
-
+    protected final Interface owner;
+    private final String kind;
+    private final PositionSetting position;
+    private final DragHandle drag = new DragHandle();
     private final List<Entry<R>> entries = new ArrayList<>();
     private float alpha;
     private float animRows;
-    private boolean editing;
-    private boolean dragging;
-    private boolean mouseWasDown;
-    private double grabX;
-    private double grabY;
     private long lastFrame = System.nanoTime();
 
-    protected PanelHud(String name, String description, double defaultX, double defaultY) {
-        super(name, description, Category.RENDER);
-        this.posX = new SliderSetting("Position X (%)", defaultX, 0.0, 100.0, 0.1);
-        this.posY = new SliderSetting("Position Y (%)", defaultY, 0.0, 100.0, 0.1);
-        with(this.scale, this.posX, this.posY);
+    protected HudCard(Interface owner, String kind, PositionSetting position) {
+        this.owner = owner;
+        this.kind = kind;
+        this.position = position;
     }
 
-    /** Card width in design pixels. */
     protected abstract float cardWidth();
 
-    /** Design y of the first row's text baseline. */
     protected abstract float firstBaseline();
 
-    /** Rows to show right now, in order. */
     protected abstract List<R> currentRows();
 
-    /** Sample rows shown while the chat is open and there is nothing real to show. */
     protected abstract List<R> sampleRows();
 
     protected abstract void drawHeader(GuiGraphicsExtractor gg, float x, float y, float s);
@@ -85,10 +71,11 @@ public abstract class PanelHud<R extends PanelHud.Row> extends Module {
 
     public final void render(GuiGraphicsExtractor gg, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
-        if (!isEnabled() || mc.player == null || mc.level == null) {
+        if (!this.owner.shows(this.kind) || mc.player == null || mc.level == null) {
             this.alpha = 0.0f;
             this.entries.clear();
             this.animRows = 0.0f;
+            this.drag.reset();
             return;
         }
         long now = System.nanoTime();
@@ -96,47 +83,42 @@ public abstract class PanelHud<R extends PanelHud.Row> extends Module {
         this.lastFrame = now;
         float k = 1.0f - (float) Math.exp(-dt * 12.0f);
 
-        this.editing = mc.gui.screen() instanceof ChatScreen;
-        if (!this.editing) {
-            this.dragging = false;
-            this.mouseWasDown = false;
+        boolean editing = mc.gui.screen() instanceof ChatScreen;
+        if (!editing) {
+            this.drag.reset();
         }
         List<R> rows = currentRows();
-        if (rows.isEmpty() && this.editing) {
+        if (rows.isEmpty() && editing) {
             rows = sampleRows();
         }
         updateEntries(rows, k);
 
         this.animRows += (rows.size() - this.animRows) * k;
-        boolean visible = !rows.isEmpty();
-        this.alpha += ((visible ? 1.0f : 0.0f) - this.alpha) * (1.0f - (float) Math.exp(-dt * 10.0f));
+        this.alpha += ((!rows.isEmpty() ? 1.0f : 0.0f) - this.alpha) * (1.0f - (float) Math.exp(-dt * 10.0f));
         if (this.alpha < 0.01f) {
             return;
         }
 
         Render2D.begin(gg);
         try {
-            float s = Render2D.screenHeight() / 1080.0f * (float) this.scale.value() / 100.0f;
+            float s = this.owner.pixelScale();
             float w = cardWidth() * s;
             float h = (55.0f + ROW_PITCH * this.animRows) * s;
-            float x = (Render2D.screenWidth() - w) * (float) this.posX.value() / 100.0f;
-            float y = (Render2D.screenHeight() - h) * (float) this.posY.value() / 100.0f;
-            if (this.editing) {
-                handleDrag(x, y, w, h);
-                x = (Render2D.screenWidth() - w) * (float) this.posX.value() / 100.0f;
-                y = (Render2D.screenHeight() - h) * (float) this.posY.value() / 100.0f;
+            float x = DragHandle.posX(this.position, w);
+            float y = DragHandle.posY(this.position, h);
+            if (editing) {
+                this.drag.update(this.position, x, y, w, h);
+                x = DragHandle.posX(this.position, w);
+                y = DragHandle.posY(this.position, h);
             }
             Render2D.pushAlpha(this.alpha);
-            if (this.editing) {
-                int frame = Render2D.withAlpha(Style.accent(), this.dragging ? 0.9f : 0.55f);
-                Render2D.round(gg, x - 3.0f * s, y - 3.0f * s, w + 6.0f * s, h + 6.0f * s, 16.0f * s, frame);
-                HFont hint = Fonts.of(Fonts.INTER_MEDIUM, Math.max(8, Math.round(12.0f * s)));
-                hint.draw(gg, "Drag to move", x, y - 8.0f * s, 0xFFFFFFFF);
+            if (editing) {
+                this.drag.drawFrame(gg, x, y, w, h, s);
             }
             Render2D.round(gg, x, y, w, h, 13.0f * s, BACKGROUND);
             drawHeader(gg, x, y, s);
 
-            // rows are clipped to the card so a row that is sliding out never pokes outside the animated card
+            // rows are clipped to the card so a row sliding out never pokes outside the animated card
             Render2D.pushClip(gg, x, y + 44.0f * s, w, Math.max(0.0f, h - 44.0f * s));
             for (Entry<R> entry : this.entries) {
                 if (entry.presence < 0.02f) {
@@ -153,7 +135,6 @@ public abstract class PanelHud<R extends PanelHud.Row> extends Module {
         }
     }
 
-    /** Matches rows to entries by id: new rows fade in, missing rows fade out, the rest slide to their slot. */
     private void updateEntries(List<R> rows, float k) {
         for (Entry<R> entry : this.entries) {
             entry.present = false;
@@ -186,32 +167,6 @@ public abstract class PanelHud<R extends PanelHud.Row> extends Module {
                 }
             }
         }
-    }
-
-    private void handleDrag(float x, float y, float w, float h) {
-        Minecraft mc = Minecraft.getInstance();
-        double mx = Render2D.mouseX();
-        double my = Render2D.mouseY();
-        boolean down = GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
-        if (down && !this.mouseWasDown && Render2D.hovered(mx, my, x, y, w, h)) {
-            this.dragging = true;
-            this.grabX = mx - x;
-            this.grabY = my - y;
-        }
-        if (!down) {
-            this.dragging = false;
-        }
-        if (this.dragging) {
-            double freeW = Render2D.screenWidth() - w;
-            double freeH = Render2D.screenHeight() - h;
-            if (freeW > 1.0) {
-                this.posX.value((mx - this.grabX) / freeW * 100.0);
-            }
-            if (freeH > 1.0) {
-                this.posY.value((my - this.grabY) / freeH * 100.0);
-            }
-        }
-        this.mouseWasDown = down;
     }
 
     protected static HFont title(float s) {
