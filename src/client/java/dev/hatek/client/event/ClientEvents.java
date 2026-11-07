@@ -25,13 +25,13 @@ public final class ClientEvents {
             airStuck.beforeTick(mc.player);
         }
         dev.hatek.client.module.impl.combat.OffhandSwapper.beforePlayerTick(mc.player);
-        dev.hatek.client.module.impl.combat.SpearRush spearRush = dev.hatek.client.module.impl.combat.SpearRush.instance();
-        if (spearRush != null) {
-            spearRush.beforeTick(mc.player);
-        }
         dev.hatek.client.module.impl.movement.DragonFly dragonFly = dev.hatek.client.module.impl.movement.DragonFly.instance();
         if (dragonFly != null) {
             dragonFly.beforeTick(mc.player);
+        }
+        dev.hatek.client.module.impl.combat.SpearRush spearRush = dev.hatek.client.module.impl.combat.SpearRush.instance();
+        if (spearRush != null) {
+            spearRush.beforeTick(mc.player);
         }
 
         for (Module module : ModuleManager.all()) {

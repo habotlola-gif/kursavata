@@ -40,7 +40,8 @@ public final class DragonFly extends Module {
             return;
         }
         player.getAbilities().setFlyingSpeed((float) this.speed.value() * VANILLA_FLY_SPEED);
-        if (this.instantMotion.value()) {
+        // the spear rush steers by itself: leave its momentum alone
+        if (this.instantMotion.value() && !dev.hatek.client.module.impl.combat.SpearRush.isActive()) {
             applyInstantMotion(player);
         }
     }

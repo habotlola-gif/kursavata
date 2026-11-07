@@ -38,6 +38,12 @@ public final class SpearRush extends Module {
     private float startHealth;       // target health when it was locked (with absorption)
     private float lowestHealth;      // the lowest health seen since: a drop means the server registered the hit
     private boolean noTargetNotified;
+    private boolean active;          // true on a tick where the rush is steering the player
+
+    /** True while SpearRush is steering the player (DragonFly must not overwrite the momentum then). */
+    public static boolean isActive() {
+        return instance != null && instance.active;
+    }
 
     public SpearRush() {
         super("SpearRush", "Auto-aim and accelerate into a player while charging a spear in flight", Category.COMBAT);
@@ -96,6 +102,7 @@ public final class SpearRush extends Module {
 
     /** Start of LocalPlayer.tick. */
     public void beforeTick(LocalPlayer player) {
+        this.active = false;
         if (!isEnabled()) {
             return;
         }
@@ -156,6 +163,7 @@ public final class SpearRush extends Module {
         this.currentSpeed = Math.min(this.speed.value(),
                 Math.max(this.currentSpeed, Math.max(0.3, horizontalNow)) + this.acceleration.value());
         player.setDeltaMovement(toTarget.normalize().scale(this.currentSpeed));
+        this.active = true;
     }
 
     /** The player closest to the line of sight within the search cone and the range. */

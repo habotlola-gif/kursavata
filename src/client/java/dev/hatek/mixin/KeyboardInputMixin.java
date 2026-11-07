@@ -10,12 +10,15 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Stand still while AutoSwap does an inventory click (servers check movement during inventory actions). */
+/**
+ * Movement keys are ignored while an inventory swap needs the player to stand still, and while SpearRush steers the
+ * player into a target (the player's own input must not fight the rush).
+ */
 @Mixin(KeyboardInput.class)
 public abstract class KeyboardInputMixin extends ClientInput {
     @Inject(method = "tick", at = @At("TAIL"))
     private void hatek$pause(CallbackInfo ci) {
-        if (OffhandSwapper.pauseMovement()) {
+        if (OffhandSwapper.pauseMovement() || dev.hatek.client.module.impl.combat.SpearRush.isActive()) {
             this.keyPresses = new Input(false, false, false, false, false, false, false);
             this.moveVector = Vec2.ZERO;
         }
