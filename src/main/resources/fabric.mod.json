@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "hatek_client",
+  "version": "${version}",
+
+  "name": "Hatek Client",
+  "description": "",
+  "authors": [],
+  "contact": {},
+
+  "license": "All-Rights-Reserved",
+  "icon": "assets/hatek_client/icon.png",
+
+  "environment": "client",
+  "entrypoints": {
+    "fabric-datagen": [
+      "dev.hatek.Hatek_clientDataGenerator"
+    ],
+    "client": [
+      "dev.hatek.HatekClient"
+    ],
+    "main": ["dev.hatek.hatek_client.Hatek_client"]
+  },
+
+  "mixins": [
+    "hatek_client.mixins.json"
+    ,{
+      "config": "hatek_client.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
