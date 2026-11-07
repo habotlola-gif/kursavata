@@ -17,6 +17,10 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.KineticWeapon;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Locale;
@@ -50,6 +54,7 @@ public final class SuperSpear extends Module {
     private final SliderSetting range = new SliderSetting("Range (blocks)", 100.0, 10.0, 150.0, 1.0);
     private final SliderSetting cone = new SliderSetting("Mark cone (degrees)", 25.0, 3.0, 180.0, 1.0);
     private final SliderSetting packetBoost = new SliderSetting("Packet boost (extra hops per tick, 0 = off)", 0.0, 0.0, 5.0, 1.0);
+    private final BoolSetting visibleOnly = new BoolSetting("Only visible targets (not through blocks)", true);
     private final BoolSetting useDragonFly = new BoolSetting("Use DragonFly (switch it on, take the faster speed)", true);
     private final BoolSetting stabOnContact = new BoolSetting("Melee hit if the spear did not hurt", true);
     private final BoolSetting stopAfter = new BoolSetting("Stop after the pierce or attempt", true);
@@ -69,7 +74,7 @@ public final class SuperSpear extends Module {
     public SuperSpear() {
         super("SuperSpear", "Right click with a spear aimed at a player: mark, charge, rush through", Category.COMBAT);
         instance = this;
-        with(this.onlyWithSpear, this.speed, this.acceleration, this.packetBoost, this.range, this.cone, this.useDragonFly,
+        with(this.onlyWithSpear, this.speed, this.acceleration, this.packetBoost, this.visibleOnly, this.range, this.cone, this.useDragonFly,
                 this.stabOnContact, this.stopAfter);
     }
 
@@ -227,6 +232,11 @@ public final class SuperSpear extends Module {
             finish(player, false);
             return;
         }
+        if (this.visibleOnly.value() && !canSee(player, this.target)) {
+            message("Цель за блоком, удар отменён.");
+            finishStop(player);
+            return;
+        }
         double top = topSpeed();
         double horizontalNow = Math.hypot(player.getDeltaMovement().x, player.getDeltaMovement().z);
         // the very first step already starts at a good fraction of the top speed: the first contact decides the damage
@@ -303,6 +313,31 @@ public final class SuperSpear extends Module {
         abort(false);
     }
 
+    /** Stops the rush and drops the mark without a hit report. */
+    private void finishStop(LocalPlayer player) {
+        if (this.stopAfter.value()) {
+            player.setDeltaMovement(Vec3.ZERO);
+            this.active = true;
+        }
+        abort(false);
+    }
+
+    /** True when a straight line from the eyes reaches the head, the middle or the feet of the entity without a block. */
+    private static boolean canSee(LocalPlayer player, LivingEntity entity) {
+        Minecraft mc = Minecraft.getInstance();
+        Vec3 eye = player.getEyePosition();
+        AABB box = entity.getBoundingBox();
+        double[] heights = {0.9, 0.5, 0.1};
+        for (double h : heights) {
+            Vec3 point = new Vec3(box.getCenter().x, box.minY + box.getYsize() * h, box.getCenter().z);
+            BlockHitResult hit = mc.level.clip(new ClipContext(eye, point, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
+            if (hit.getType() == HitResult.Type.MISS) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private int boostCount() {
         return (int) Math.round(this.packetBoost.value());
     }
@@ -360,6 +395,9 @@ public final class SuperSpear extends Module {
             Vec3 to = other.getBoundingBox().getCenter().subtract(eye);
             double distance = to.length();
             if (distance > maxRange || distance < 0.5) {
+                continue;
+            }
+            if (this.visibleOnly.value() && !canSee(player, other)) {
                 continue;
             }
             double angle = Math.toDegrees(Math.acos(Math.max(-1.0, Math.min(1.0, look.dot(to.normalize())))));
