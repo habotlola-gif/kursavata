@@ -3,11 +3,13 @@ package dev.hatek.client.module;
 import dev.hatek.client.ui.Style;
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.combat.AutoSwap;
+import dev.hatek.client.module.impl.combat.SpearRush;
 import dev.hatek.client.module.impl.movement.AirStuck;
 import dev.hatek.client.module.impl.movement.DragonFly;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
+import dev.hatek.client.module.impl.render.Fullbright;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.client.module.impl.render.NameTags;
 import dev.hatek.client.module.impl.render.Removals;
@@ -15,6 +17,7 @@ import dev.hatek.client.module.impl.render.ShaderEsp;
 import dev.hatek.client.module.impl.render.ShaderHands;
 import dev.hatek.client.module.impl.render.SwingAnimations;
 import dev.hatek.client.module.impl.render.TargetEsp;
+import dev.hatek.client.module.impl.render.TimeChanger;
 import dev.hatek.client.module.impl.render.ViewModel;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ButtonSetting;
@@ -77,6 +80,8 @@ public final class ModuleManager {
 
         MODULES.add(new AutoSwap());
 
+        MODULES.add(new SpearRush());
+
         MODULES.add(new AirStuck());
 
         MODULES.add(new DragonFly());
@@ -94,6 +99,10 @@ public final class ModuleManager {
         MODULES.add(new TargetEsp());
 
         MODULES.add(new Interface());
+
+        MODULES.add(new Fullbright());
+
+        MODULES.add(new TimeChanger());
 
         MODULES.add(new ViewModel().enabled(true));
 

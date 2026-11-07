@@ -6,6 +6,7 @@
   "client": [
     "CameraMixin",
     "ChatScreenMixin",
+    "ClientClockManagerMixin",
     "ConnectionMixin",
     "EntityRendererMixin",
     "GameRendererMixin",
