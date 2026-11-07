@@ -28,6 +28,10 @@ public final class ClientEvents {
         if (autoSwap != null) {
             autoSwap.beforeTick(mc.player);
         }
+        dev.hatek.client.module.impl.movement.DragonFly dragonFly = dev.hatek.client.module.impl.movement.DragonFly.instance();
+        if (dragonFly != null) {
+            dragonFly.beforeTick(mc.player);
+        }
 
         for (Module module : ModuleManager.all()) {
             if (module instanceof NoJumpDelay jump) {

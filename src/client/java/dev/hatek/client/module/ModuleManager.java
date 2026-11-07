@@ -4,6 +4,7 @@ import dev.hatek.client.ui.Style;
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.combat.AutoSwap;
 import dev.hatek.client.module.impl.movement.AirStuck;
+import dev.hatek.client.module.impl.movement.DragonFly;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
@@ -77,6 +78,8 @@ public final class ModuleManager {
         MODULES.add(new AutoSwap());
 
         MODULES.add(new AirStuck());
+
+        MODULES.add(new DragonFly());
 
         MODULES.add(new NameTags());
 
