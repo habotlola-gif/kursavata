@@ -1,6 +1,8 @@
 package dev.hatek.mixin;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import dev.hatek.client.module.impl.render.Removals;
 import dev.hatek.client.render.ShaderHandsRenderer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
@@ -25,6 +27,19 @@ public abstract class GameRendererMixin {
         if (ShaderHandsRenderer.isRedirecting()) {
             ShaderHandsRenderer.end();
         }
+    }
+
+    @Inject(method = "bobHurt", at = @At("HEAD"), cancellable = true)
+    private void hatek$noHurtCam(CameraRenderState camera, com.mojang.blaze3d.vertex.PoseStack pose, CallbackInfo ci) {
+        if (Removals.removesHurtCam()) {
+            ci.cancel();
+        }
+    }
+
+    /** The world distortion of nausea and nether portals: the strength is zeroed. */
+    @ModifyExpressionValue(method = "renderLevel", at = @At(value = "INVOKE", target = "Ljava/lang/Math;max(FF)F"))
+    private float hatek$noNauseaWobble(float strength) {
+        return Removals.removesNausea() ? 0.0f : strength;
     }
 
     @Inject(method = "mainRenderTarget", at = @At("HEAD"), cancellable = true)
