@@ -8,6 +8,8 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import dev.hatek.client.render.ShaderEspRenderer;
 import dev.hatek.client.render.WorldProjection;
 import net.minecraft.client.renderer.PostChain;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Shadow;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -21,8 +23,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LevelRenderer.class)
 public abstract class LevelRendererMixin {
+    // the entityOutlineTarget() accessor returns null once the frame graph is done; vanilla blits the field
     @Shadow
-    public abstract RenderTarget entityOutlineTarget();
+    @Final
+    private RenderTarget entityOutlineTarget;
+
+    @Shadow
+    @Final
+    private LevelRenderState levelRenderState;
 
     /** ShaderESP replaces the vanilla blur of the outline buffer, so the blur pass is skipped. */
     @WrapWithCondition(method = "render", at = @At(value = "INVOKE",
@@ -36,7 +44,10 @@ public abstract class LevelRendererMixin {
     @Inject(method = "doEntityOutline", at = @At("HEAD"), cancellable = true)
     private void hatek$shaderEsp(CallbackInfo ci) {
         if (ShaderEspRenderer.isActive()) {
-            ShaderEspRenderer.composite(entityOutlineTarget());
+            // like vanilla: only draw when entity outlines were rendered this frame (the buffer is cleared then)
+            if (this.levelRenderState.shouldShowEntityOutlines && this.entityOutlineTarget != null) {
+                ShaderEspRenderer.composite(this.entityOutlineTarget);
+            }
             ci.cancel();
         }
     }

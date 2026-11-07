@@ -58,7 +58,7 @@ public final class ShaderEspRenderer {
 
     public static void composite(RenderTarget outlineTarget) {
         ShaderEsp settings = ShaderEsp.instance();
-        if (settings == null) {
+        if (settings == null || outlineTarget == null || outlineTarget.getColorTextureView() == null) {
             return;
         }
         if (ubo == null) {
