@@ -15,7 +15,6 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class SoulsEsp {
     private static final int POINTS = 20;                       // samples along the trail
-    private static final int[] HALO_SIZES = {16, 24, 32, 48, 64};
 
     private SoulsEsp() {
     }
@@ -54,12 +53,21 @@ public final class SoulsEsp {
             }
             ribbon(gg, pts, 1.0f, coreColor, 0.95f * visibility);
 
-            float[] head = pts[0];
-            if (head != null && glow > 0.0f) {
-                for (int ring = 0; ring < 2; ring++) {
-                    int d = haloSize(head[2] * (3.2f - ring * 1.2f));
-                    Render2D.circle(gg, head[0] - d / 2.0f, head[1] - d / 2.0f, d,
-                            Render2D.withAlpha(glowColor, Mth.clamp(0.16f * glow * visibility, 0.0f, 1.0f)));
+            if (glow > 0.0f) {
+                // soft halo along the trail (every second sample) and a bright one on the head
+                for (int k = POINTS - 1; k >= 1; k -= 2) {
+                    float[] p = pts[k];
+                    if (p != null) {
+                        Render2D.glow(gg, p[0], p[1], Math.max(10.0f, p[2] * 5.0f),
+                                Render2D.withAlpha(glowColor, Mth.clamp(0.22f * glow * visibility * p[3], 0.0f, 1.0f)));
+                    }
+                }
+                float[] head = pts[0];
+                if (head != null) {
+                    Render2D.glow(gg, head[0], head[1], Math.max(24.0f, head[2] * 9.0f),
+                            Render2D.withAlpha(glowColor, Mth.clamp(0.55f * glow * visibility, 0.0f, 1.0f)));
+                    Render2D.glow(gg, head[0], head[1], Math.max(10.0f, head[2] * 3.2f),
+                            Render2D.withAlpha(0xFFFFFFFF, Mth.clamp(0.75f * visibility, 0.0f, 1.0f)));
                 }
             }
         }
@@ -101,15 +109,5 @@ public final class SoulsEsp {
             Draw.triangle(gg, ax1, ay1, ax2, ay2, bx1, by1, segment);
             Draw.triangle(gg, ax2, ay2, bx2, by2, bx1, by1, segment);
         }
-    }
-
-    /** Halo discs use a few fixed sizes only (a texture is generated per size). */
-    private static int haloSize(float wanted) {
-        for (int size : HALO_SIZES) {
-            if (wanted <= size) {
-                return size;
-            }
-        }
-        return HALO_SIZES[HALO_SIZES.length - 1];
     }
 }

@@ -27,10 +27,18 @@ public record PolyRenderState(Matrix3x2fc pose, float x1, float y1, float x2, fl
 
     @Override
     public void buildVertices(VertexConsumer consumer) {
+        // The GUI pipeline culls back faces and vanilla quads wind (top-left, bottom-left, bottom-right, top-right),
+        // which is a negative signed area in screen space (y down). A triangle wound the other way is swapped,
+        // otherwise half of the triangles (or all of them, for a ribbon) would be invisible.
+        float cross = (this.x2 - this.x1) * (this.y3 - this.y1) - (this.y2 - this.y1) * (this.x3 - this.x1);
+        float bx = cross > 0.0f ? this.x3 : this.x2;
+        float by = cross > 0.0f ? this.y3 : this.y2;
+        float cx = cross > 0.0f ? this.x2 : this.x3;
+        float cy = cross > 0.0f ? this.y2 : this.y3;
         consumer.addVertexWith2DPose(this.pose, this.x1, this.y1).setColor(this.color);
-        consumer.addVertexWith2DPose(this.pose, this.x2, this.y2).setColor(this.color);
-        consumer.addVertexWith2DPose(this.pose, this.x3, this.y3).setColor(this.color);
-        consumer.addVertexWith2DPose(this.pose, this.x3, this.y3).setColor(this.color);
+        consumer.addVertexWith2DPose(this.pose, bx, by).setColor(this.color);
+        consumer.addVertexWith2DPose(this.pose, cx, cy).setColor(this.color);
+        consumer.addVertexWith2DPose(this.pose, cx, cy).setColor(this.color);
     }
 
     @Override

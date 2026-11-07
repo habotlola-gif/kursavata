@@ -53,6 +53,21 @@ public final class TexCache {
         });
     }
 
+    /** Soft round glow: white, opaque in the middle and fading smoothly to nothing at the edge. Scaled when drawn. */
+    public static Identifier glow() {
+        final int size = 256;
+        return get("glow_" + size, size, size, g -> {
+            float c = size / 2.0f;
+            java.awt.RadialGradientPaint paint = new java.awt.RadialGradientPaint(
+                    new java.awt.geom.Point2D.Float(c, c), c,
+                    new float[]{0.0f, 0.12f, 0.30f, 0.55f, 0.80f, 1.0f},
+                    new Color[]{new Color(255, 255, 255, 255), new Color(255, 255, 255, 200), new Color(255, 255, 255, 100),
+                            new Color(255, 255, 255, 38), new Color(255, 255, 255, 8), new Color(255, 255, 255, 0)});
+            g.setPaint(paint);
+            g.fill(new java.awt.geom.Rectangle2D.Float(0.0f, 0.0f, size, size));
+        });
+    }
+
     public static Identifier circle(int d) {
         return get("circle_" + d, d, d, g -> {
             g.setColor(Color.WHITE);

@@ -152,6 +152,17 @@ public final class Render2D {
         texture(gg, TexCache.circle(id), Math.round(x), Math.round(y), id, id, argb);
     }
 
+    /** A soft glow centred on (cx, cy) with the given diameter (pixels); any size, one shared texture. */
+    public static void glow(GuiGraphicsExtractor gg, float cx, float cy, float diameter, int argb) {
+        int d = Math.max(2, Math.round(Math.min(diameter, 2000.0f)));
+        int color = tint(argb);
+        if ((color >>> 24) == 0) {
+            return;
+        }
+        gg.blit(RenderPipelines.GUI_TEXTURED, TexCache.glow(), Math.round(cx - d / 2.0f), Math.round(cy - d / 2.0f),
+                0.0f, 0.0f, d, d, 256, 256, 256, 256, color);
+    }
+
     public static void icon(GuiGraphicsExtractor gg, String name, float x, float y, float w, float h, int argb) {
         icon(gg, name, x, y, w, h, argb, false);
     }

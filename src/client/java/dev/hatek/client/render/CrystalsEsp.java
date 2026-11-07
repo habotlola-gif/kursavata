@@ -93,12 +93,11 @@ public final class CrystalsEsp {
 
         for (Crystal cr : crystals) {
             if (glow > 0.0f) {
-                // soft glow: three translucent discs of quantised size (keeps the texture cache small)
-                for (int ring = 0; ring < 3; ring++) {
-                    int d = glowSize(cr.glowR() * (2.0f - ring * 0.55f));
-                    Render2D.circle(gg, cr.cx() - d / 2.0f, cr.cy() - d / 2.0f, d,
-                            Render2D.withAlpha(0xFF000000 | (color & 0xFFFFFF), Mth.clamp(0.10f * glow * vis * alpha, 0.0f, 1.0f)));
-                }
+                // soft glow: a wide dim one and a small bright one, both from the shared glow texture
+                Render2D.glow(gg, cr.cx(), cr.cy(), Math.min(cr.glowR() * 2.6f, 420.0f),
+                        Render2D.withAlpha(0xFF000000 | (color & 0xFFFFFF), Mth.clamp(0.50f * glow * vis * alpha, 0.0f, 1.0f)));
+                Render2D.glow(gg, cr.cx(), cr.cy(), Math.min(cr.glowR() * 1.0f, 200.0f),
+                        Render2D.withAlpha(0xFFFFFFFF, Mth.clamp(0.35f * glow * vis * alpha, 0.0f, 1.0f)));
             }
             cr.faces().sort(Comparator.comparingDouble((Face f) -> -f.depth()));
             for (Face f : cr.faces()) {
@@ -117,19 +116,6 @@ public final class CrystalsEsp {
                 Draw.line(gg, c[0], c[1], a[0], a[1], th, edge);
             }
         }
-    }
-
-    // The disc textures are generated per diameter, so only a handful of small sizes are ever allowed.
-    // Free-form sizes (a crystal right at the camera gives thousands of pixels) made the game freeze.
-    private static final int[] GLOW_SIZES = {16, 24, 32, 48, 64, 96, 128};
-
-    private static int glowSize(float wanted) {
-        for (int size : GLOW_SIZES) {
-            if (wanted <= size) {
-                return size;
-            }
-        }
-        return GLOW_SIZES[GLOW_SIZES.length - 1];
     }
 
     private static void addFace(List<Face> out, Vec3 a, Vec3 b, Vec3 c, Vec3 center, Vec3 camera, Vec3 light) {
