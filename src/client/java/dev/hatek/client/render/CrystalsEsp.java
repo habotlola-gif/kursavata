@@ -77,7 +77,7 @@ public final class CrystalsEsp {
             }
             float[] sc = WorldProjection.toScreen(c);
             float[] scTop = WorldProjection.toScreen(top);
-            if (sc == null || scTop == null || faces.isEmpty()) {
+            if (sc == null || scTop == null || faces.isEmpty() || Math.abs(sc[0]) > 20000.0f || Math.abs(sc[1]) > 20000.0f) {
                 continue;
             }
             double dist = Math.max(0.3, c.distanceTo(camera));
@@ -95,7 +95,7 @@ public final class CrystalsEsp {
             if (glow > 0.0f) {
                 // soft glow: three translucent discs of quantised size (keeps the texture cache small)
                 for (int ring = 0; ring < 3; ring++) {
-                    int d = Math.max(8, Math.round(cr.glowR() * (2.0f - ring * 0.55f) / 4.0f) * 4);
+                    int d = glowSize(cr.glowR() * (2.0f - ring * 0.55f));
                     Render2D.circle(gg, cr.cx() - d / 2.0f, cr.cy() - d / 2.0f, d,
                             Render2D.withAlpha(0xFF000000 | (color & 0xFFFFFF), Mth.clamp(0.10f * glow * vis * alpha, 0.0f, 1.0f)));
                 }
@@ -117,6 +117,19 @@ public final class CrystalsEsp {
                 Draw.line(gg, c[0], c[1], a[0], a[1], th, edge);
             }
         }
+    }
+
+    // The disc textures are generated per diameter, so only a handful of small sizes are ever allowed.
+    // Free-form sizes (a crystal right at the camera gives thousands of pixels) made the game freeze.
+    private static final int[] GLOW_SIZES = {16, 24, 32, 48, 64, 96, 128};
+
+    private static int glowSize(float wanted) {
+        for (int size : GLOW_SIZES) {
+            if (wanted <= size) {
+                return size;
+            }
+        }
+        return GLOW_SIZES[GLOW_SIZES.length - 1];
     }
 
     private static void addFace(List<Face> out, Vec3 a, Vec3 b, Vec3 c, Vec3 center, Vec3 camera, Vec3 light) {
