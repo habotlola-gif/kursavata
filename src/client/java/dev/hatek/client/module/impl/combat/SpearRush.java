@@ -29,12 +29,12 @@ public final class SpearRush extends Module {
 
     private static SpearRush instance;
 
-    private final SliderSetting speed = new SliderSetting("Top speed (blocks/tick)", 2.0, 0.5, 5.0, 0.1);
-    private final SliderSetting acceleration = new SliderSetting("Acceleration (blocks/tick per tick)", 0.15, 0.02, 1.0, 0.01);
+    private final SliderSetting speed = new SliderSetting("Top speed (blocks/tick)", 4.0, 0.5, 8.0, 0.1);
+    private final SliderSetting acceleration = new SliderSetting("Acceleration (blocks/tick per tick)", 0.6, 0.05, 3.0, 0.05);
     private final SliderSetting range = new SliderSetting("Range (blocks)", 80.0, 10.0, 120.0, 1.0);
     private final SliderSetting cone = new SliderSetting("Target search cone (degrees)", 60.0, 5.0, 180.0, 5.0);
     private final SliderSetting aimSpeed = new SliderSetting("Aim speed (%)", 100.0, 10.0, 100.0, 5.0);
-    private final BoolSetting useDragonFly = new BoolSetting("Use DragonFly (its speed)", true);
+    private final BoolSetting useDragonFly = new BoolSetting("Use DragonFly (switch it on, take the faster speed)", true);
     private final BoolSetting onlyFlying = new BoolSetting("Only while flying", true);
 
     private LivingEntity target;
@@ -111,7 +111,9 @@ public final class SpearRush extends Module {
 
     private double topSpeed() {
         DragonFly fly = DragonFly.instance();
-        return this.useDragonFly.value() && fly != null && fly.isEnabled() ? fly.speedValue() : this.speed.value();
+        double own = this.speed.value();
+        // the faster of the two wins: DragonFly's own Speed never slows the rush down
+        return this.useDragonFly.value() && fly != null && fly.isEnabled() ? Math.max(own, fly.speedValue()) : own;
     }
 
     /** Start of LocalPlayer.tick (after DragonFly). */
@@ -165,7 +167,7 @@ public final class SpearRush extends Module {
         double top = topSpeed();
         // start from the speed you already have, then speed up every tick up to the top speed
         double horizontalNow = Math.hypot(player.getDeltaMovement().x, player.getDeltaMovement().z);
-        this.currentSpeed = Math.min(top, Math.max(this.currentSpeed, Math.max(0.3, horizontalNow)) + this.acceleration.value());
+        this.currentSpeed = Math.min(top, Math.max(this.currentSpeed, Math.max(1.0, horizontalNow)) + this.acceleration.value());
 
         if (this.passing) {
             // through the target and on, straight, with the speed it had
