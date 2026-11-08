@@ -94,6 +94,10 @@ public final class Notifications extends Module {
         suppressed = value;
     }
 
+    public static boolean isSuppressed() {
+        return suppressed;
+    }
+
     /** Called by Module.toggle after the state changed. */
     public static void moduleToggled(Module module, boolean enabled) {
         Notifications self = instance;

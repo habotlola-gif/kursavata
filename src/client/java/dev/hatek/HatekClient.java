@@ -105,6 +105,7 @@ public class HatekClient implements ClientModInitializer {
         }
 
         dev.hatek.client.feature.config.ConfigManager.tick();
+        dev.hatek.client.module.impl.render.ClientSound.tickQueue();
         ModuleManager.tickAll();
         dev.hatek.client.module.impl.combat.OffhandSwapper.tick();
 

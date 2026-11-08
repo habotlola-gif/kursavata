@@ -114,6 +114,8 @@ public final class ModuleManager {
 
         MODULES.add(new dev.hatek.client.module.impl.render.Notifications());
 
+        MODULES.add(new dev.hatek.client.module.impl.render.ClientSound());
+
         MODULES.add(new Freecam());
 
         MODULES.add(new TimeChanger());
