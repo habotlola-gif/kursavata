@@ -33,6 +33,16 @@ public final class SmoothRotation {
     private static float velYaw;
     private static float velPitch;
 
+    // human behaviour: reaction time, hand tremor, a slowly changing aim spot
+    private static long reactUntilMs;
+    private static float tremYaw;
+    private static float tremPitch;
+    private static float spotU;
+    private static float spotV;
+    private static float spotTargetU;
+    private static float spotTargetV;
+    private static float spotLeft;
+
     // jerky speed
     private static boolean flicking;
     private static float phaseLeft;
@@ -111,10 +121,16 @@ public final class SmoothRotation {
             shapeLeft = 0.0F;
             phaseLeft = 0.0F;
             flicking = true;
+            // a person needs a moment to notice a new target before the head starts moving
+            reactUntilMs = System.currentTimeMillis() + 90L + rnd.nextInt(110);
+            spotLeft = 0.0F;
         }
+        updateHumanNoise(dt, rnd);
 
         // ---------------------------------------------------------------- aim point (multipoint)
         float[] aim = anglesTo(aimPoint(entity, dt, rnd));
+        aim[0] += tremYaw;
+        aim[1] += tremPitch;
         float curYaw = mc.player.getYRot();
         float curPitch = mc.player.getXRot();
         float deltaYaw = Mth.wrapDegrees(aim[0] - curYaw);
@@ -137,19 +153,27 @@ public final class SmoothRotation {
         speedMul += (wanted - speedMul) * Math.min(1.0F, dt * 26.0F);
 
         float speed = AttackAura.smoothSpeed();
-        float rate = 24.0F * speed * (0.15F + 0.85F * speedMul);           // fraction of the remaining angle per second
-        float cap = 900.0F * speed * (0.25F + 0.75F * speedMul);           // degrees per second
+        float rate = 14.0F * speed * (0.2F + 0.8F * speedMul);              // fraction of the remaining angle per second
+        float cap = 650.0F * speed * (0.25F + 0.75F * speedMul);            // degrees per second
         float wantYaw = Mth.clamp(deltaYaw * rate, -cap, cap);
-        float wantPitch = Mth.clamp(deltaPitch * rate * 0.8F, -cap * 0.5F, cap * 0.5F);
-        float follow = Math.min(1.0F, dt * 26.0F);
-        velYaw += (wantYaw - velYaw) * follow;
-        velPitch += (wantPitch - velPitch) * follow;
+        float wantPitch = Mth.clamp(deltaPitch * rate * 0.7F, -cap * 0.4F, cap * 0.4F);
+        if (System.currentTimeMillis() < reactUntilMs) {
+            wantYaw = 0.0F;
+            wantPitch = 0.0F;
+        }
+        // the head cannot change speed instantly: limited angular acceleration (a little different every frame)
+        float accel = (3400.0F + rnd.nextFloat() * 1600.0F) * speed;
+        velYaw += Mth.clamp(wantYaw - velYaw, -accel * dt, accel * dt);
+        velPitch += Mth.clamp(wantPitch - velPitch, -accel * 0.6F * dt, accel * 0.6F * dt);
 
         float stepYaw = velYaw * dt;
         float stepPitch = velPitch * dt;
-        // never overshoot the aim point
-        if (Math.abs(stepYaw) > Math.abs(deltaYaw)) {
+        // a small overshoot of the aim point is allowed (people do it); pitch never overshoots
+        float overshoot = 3.0F;
+        if (Math.abs(deltaYaw) < 0.3F && Math.abs(velYaw) < 8.0F) {
             stepYaw = deltaYaw;
+        } else if (Math.signum(stepYaw) == Math.signum(deltaYaw) && Math.abs(stepYaw) > Math.abs(deltaYaw) + overshoot) {
+            stepYaw = deltaYaw + Math.signum(deltaYaw) * overshoot;
         }
         if (Math.abs(stepPitch) > Math.abs(deltaPitch)) {
             stepPitch = deltaPitch;
@@ -164,6 +188,24 @@ public final class SmoothRotation {
         float epsilon = Math.max(3.5F, AttackAura.targetAngularHalf() * 0.55F);
         aimed = (Math.abs(Mth.wrapDegrees(aim[0] - sentYaw)) <= epsilon && Math.abs(aim[1] - sentPitch) <= epsilon)
                 || hits(sentYaw, sentPitch, entity.getBoundingBox());
+    }
+
+    /** Hand tremor (slow filtered noise) and the aim spot that wanders a little inside the hitbox every second or so. */
+    private static void updateHumanNoise(float dt, ThreadLocalRandom rnd) {
+        float k = (float) Math.sqrt(dt);
+        tremYaw += -tremYaw * dt * 4.0F + (float) rnd.nextGaussian() * k * 0.55F;
+        tremPitch += -tremPitch * dt * 5.0F + (float) rnd.nextGaussian() * k * 0.32F;
+        tremYaw = Mth.clamp(tremYaw, -0.45F, 0.45F);
+        tremPitch = Mth.clamp(tremPitch, -0.3F, 0.3F);
+        spotLeft -= dt;
+        if (spotLeft <= 0.0F) {
+            spotLeft = 0.5F + rnd.nextFloat() * 1.0F;
+            spotTargetU = (rnd.nextFloat() * 2.0F - 1.0F) * 0.55F;
+            spotTargetV = (rnd.nextFloat() * 2.0F - 1.0F) * 0.5F;
+        }
+        float blend = Math.min(1.0F, dt * 2.2F);
+        spotU += (spotTargetU - spotU) * blend;
+        spotV += (spotTargetV - spotV) * blend;
     }
 
     // ------------------------------------------------------------------------------------------------ pattern
@@ -211,8 +253,8 @@ public final class SmoothRotation {
                 out[1] = Mth.sin(t * shapeB) * 0.8F;
             }
             default -> {
-                out[0] = 0.0F;
-                out[1] = 0.0F;
+                out[0] = spotU;
+                out[1] = spotV;
             }
         }
         // a little slow wandering on top of every pattern so it is never mechanical

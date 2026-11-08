@@ -76,12 +76,12 @@ public final class AttackAura extends Module {
     private final ModeSetting rotationMode =
             new ModeSetting("Rotation", 0, ROT_UNIVERSAL, ROT_SMOOTH);
     private final SliderSetting smoothSpeed = new SliderSetting("Smooth: aim speed", 1.0, 0.4, 2.5, 0.1);
-    private final SliderSetting smoothJerk = new SliderSetting("Smooth: jerk (speed bursts, %)", 65.0, 0.0, 100.0, 5.0);
+    private final SliderSetting smoothJerk = new SliderSetting("Smooth: jerk (speed bursts, %)", 45.0, 0.0, 100.0, 5.0);
     private final ModeSetting smoothPattern = new ModeSetting("Smooth: multipoint pattern", 0,
             SmoothRotation.NORMAL, SmoothRotation.SWAP, SmoothRotation.CIRCLE, SmoothRotation.FIGURE_8,
             SmoothRotation.ZIGZAG, SmoothRotation.RANDOM);
-    private final SliderSetting smoothPatternSpeed = new SliderSetting("Smooth: pattern speed", 1.0, 0.2, 3.0, 0.1);
-    private final SliderSetting smoothPatternSize = new SliderSetting("Smooth: pattern size (%)", 55.0, 10.0, 95.0, 5.0);
+    private final SliderSetting smoothPatternSpeed = new SliderSetting("Smooth: pattern speed", 0.6, 0.2, 3.0, 0.1);
+    private final SliderSetting smoothPatternSize = new SliderSetting("Smooth: pattern size (%)", 30.0, 10.0, 95.0, 5.0);
     private final BoolSetting smoothLowerInAir = new BoolSetting("Smooth: aim lower while jumping", true);
     private final MultiSetting targets = new MultiSetting("Targets",
             List.of(PLAYERS, NAKED, MOBS), PLAYERS, NAKED, MOBS);
