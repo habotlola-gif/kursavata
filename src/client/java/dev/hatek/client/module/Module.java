@@ -109,6 +109,7 @@ public class Module {
         } else {
             onDisable();
         }
+        dev.hatek.client.module.impl.render.Notifications.moduleToggled(this, this.enabled);
     }
 
     public void setEnabled(boolean value) {

@@ -112,6 +112,8 @@ public final class ModuleManager {
 
         MODULES.add(new Fullbright());
 
+        MODULES.add(new dev.hatek.client.module.impl.render.Notifications());
+
         MODULES.add(new Freecam());
 
         MODULES.add(new TimeChanger());

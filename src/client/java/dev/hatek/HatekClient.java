@@ -70,6 +70,16 @@ public class HatekClient implements ClientModInitializer {
                     }
                 });
 
+        HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
+                Identifier.fromNamespaceAndPath(MOD_ID, "notifications"),
+                (graphics, delta) -> {
+                    dev.hatek.client.module.impl.render.Notifications notifications =
+                            dev.hatek.client.module.impl.render.Notifications.instance();
+                    if (notifications != null) {
+                        notifications.render(graphics, delta);
+                    }
+                });
+
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(

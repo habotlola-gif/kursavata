@@ -123,6 +123,7 @@ public final class ConfigManager {
             if (mc.player != null && mc.level != null) {
                 JsonObject modules = pendingEnable;
                 pendingEnable = null;
+                dev.hatek.client.module.impl.render.Notifications.suppress(true);
                 for (Module module : ModuleManager.all()) {
                     JsonElement raw = modules.get(module.name());
                     if (raw != null && raw.isJsonObject() && raw.getAsJsonObject().has("enabled")
@@ -131,6 +132,7 @@ public final class ConfigManager {
                         module.toggle();
                     }
                 }
+                dev.hatek.client.module.impl.render.Notifications.suppress(false);
             }
             return;
         }
@@ -200,7 +202,12 @@ public final class ConfigManager {
             if (modules == null) {
                 return;
             }
-            applyModules(modules, true);
+            dev.hatek.client.module.impl.render.Notifications.suppress(true);
+            try {
+                applyModules(modules, true);
+            } finally {
+                dev.hatek.client.module.impl.render.Notifications.suppress(false);
+            }
             loadedName = entry.name();
         } catch (Exception ignored) {
         }
