@@ -6,6 +6,7 @@ import dev.hatek.client.module.impl.combat.aura.Attack;
 import dev.hatek.client.module.impl.combat.aura.rotation.ComponentManager;
 import dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
+import dev.hatek.client.module.impl.combat.aura.rotation.NeuralRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.SmoothRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
@@ -48,6 +49,7 @@ public final class AttackAura extends Module {
 
     public static final String ROT_UNIVERSAL = "Universal Aura";
     public static final String ROT_SMOOTH = "Smooth Rotation";
+    public static final String ROT_NEURAL = "Neural Rotation";
 
     public static final String SPACE_TIME = "SpaceTime";
 
@@ -74,7 +76,9 @@ public final class AttackAura extends Module {
     private final ModeSetting movementType =
             new ModeSetting("Movement", 0, MOVE_DEFAULT, MOVE_FREE);
     private final ModeSetting rotationMode =
-            new ModeSetting("Rotation", 0, ROT_UNIVERSAL, ROT_SMOOTH);
+            new ModeSetting("Rotation", 0, ROT_UNIVERSAL, ROT_SMOOTH, ROT_NEURAL);
+    private final SliderSetting neuralChaos = new SliderSetting("Neural: хаотичность (%)", 60.0, 10.0, 120.0, 5.0);
+    private final SliderSetting neuralAssist = new SliderSetting("Neural: подправка к цели (%)", 40.0, 0.0, 100.0, 5.0);
     private final SliderSetting smoothSpeed = new SliderSetting("Smooth: aim speed", 1.0, 0.4, 2.5, 0.1);
     private final SliderSetting smoothJerk = new SliderSetting("Smooth: jerk (speed bursts, %)", 45.0, 0.0, 100.0, 5.0);
     private final ModeSetting smoothPattern = new ModeSetting("Smooth: multipoint pattern", 0,
@@ -114,10 +118,12 @@ public final class AttackAura extends Module {
                 Category.COMBAT);
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
-        with(this.attackRange, this.preRange, this.movementType, this.rotationMode, this.smoothSpeed, this.smoothJerk,
+        with(this.attackRange, this.preRange, this.movementType, this.rotationMode, this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.targets, this.misc,
                 this.extras, this.chargeSpread);
 
+        this.neuralChaos.visibleIf(AttackAura::neuralRotation);
+        this.neuralAssist.visibleIf(AttackAura::neuralRotation);
         // the Smooth Rotation settings exist only while that rotation is selected
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir)) {
@@ -343,7 +349,19 @@ public final class AttackAura extends Module {
     }
 
     public static boolean spaceTime() {
-        return instance != null && !smoothRotation();
+        return instance != null && !smoothRotation() && !neuralRotation();
+    }
+
+    public static boolean neuralRotation() {
+        return instance != null && instance.rotationMode.is(ROT_NEURAL);
+    }
+
+    public static float neuralChaos() {
+        return instance == null ? 0.6f : (float) instance.neuralChaos.value() / 100.0f;
+    }
+
+    public static float neuralAssist() {
+        return instance == null ? 0.4f : (float) instance.neuralAssist.value() / 100.0f;
     }
 
     public static boolean smoothRotation() {
@@ -375,6 +393,9 @@ public final class AttackAura extends Module {
     }
 
     private static boolean aimedNow() {
+        if (neuralRotation()) {
+            return NeuralRotation.aimed();
+        }
         return smoothRotation() ? SmoothRotation.aimed() : SpaceTime.aimed();
     }
 
@@ -460,6 +481,9 @@ public final class AttackAura extends Module {
         boolean canAttack = Attack.shouldAttack(target, false, true, 0L, ranges);
         SpaceTime.onRotation(target, canAttack);
         SmoothRotation.onRotation(target, canAttack);
+        if (neuralRotation()) {
+            NeuralRotation.onTick(target);
+        }
     }
 
     private void updateTarget() {
@@ -554,6 +578,7 @@ public final class AttackAura extends Module {
 
         SpaceTime.reshuffleAll();
         SmoothRotation.reshuffleAll();
+        NeuralRotation.reshuffleAll();
 
         Attack.getCooldownTimer().reset();
 
@@ -576,6 +601,7 @@ public final class AttackAura extends Module {
 
         SpaceTime.forget();
         SmoothRotation.forget();
+        NeuralRotation.forget();
 
         releaseSprint();
 
