@@ -3,6 +3,7 @@ package dev.hatek.client.module.impl.render;
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.setting.BoolSetting;
+import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.MultiSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.render.Privilege;
@@ -44,6 +45,8 @@ public final class NameTags extends Module {
             LEFT_HAND, RIGHT_HAND, ARMOR);
     private final BoolSetting privilege = new BoolSetting("Show rank", true);
     private final BoolSetting throughWalls = new BoolSetting("Through walls", true);
+    private final ModeSetting style = new ModeSetting("Style", 0, "2D (fixed size)", "3D (shrinks with distance)");
+    private final SliderSetting worldHeight = new SliderSetting("3D: card height (blocks)", 0.22, 0.1, 0.6, 0.01);
     private final SliderSetting scale = new SliderSetting("Scale (%)", 100.0, 40.0, 200.0, 5.0);
     private final SliderSetting range = new SliderSetting("Range (blocks)", 128.0, 16.0, 256.0, 8.0);
 
@@ -52,7 +55,8 @@ public final class NameTags extends Module {
     public NameTags() {
         super("NameTags", "Name cards with face, rank and nick above players", Category.RENDER);
         instance = this;
-        with(this.items, this.privilege, this.throughWalls, this.scale, this.range);
+        with(this.items, this.privilege, this.throughWalls, this.style, this.worldHeight, this.scale, this.range);
+        this.worldHeight.visibleIf(() -> this.style.value().startsWith("3D"));
     }
 
     public static NameTags instance() {
@@ -97,10 +101,25 @@ public final class NameTags extends Module {
         float s = Render2D.screenHeight() / 1080.0f * (float) this.scale.value() / 100.0f;
         HFont rankFont = Fonts.of(Fonts.INTER_BOLD, Math.max(8, Math.round(15.0f * s)));
         HFont nickFont = Fonts.of(Fonts.INTER_SEMIBOLD, Math.max(8, Math.round(15.0f * s)));
+        boolean world = this.style.value().startsWith("3D");
+        double fov = Math.toRadians(mc.options.fov().get());
+        double pixelsPerBlock = Render2D.screenHeight() / (2.0 * Math.tan(fov / 2.0));
         Render2D.begin(gg);
         try {
             for (Tag tag : tags) {
-                draw(gg, tag, s, rankFont, nickFont);
+                if (world) {
+                    // a real perspective size: the card is a fixed height in blocks, so it shrinks with distance
+                    float factor = (float) Math.max(0.25, Math.min(3.5,
+                            pixelsPerBlock * this.worldHeight.value() / Math.max(0.5, tag.distance()) / (40.0 * s)));
+                    Render2D.pushScale(gg, tag.x(), tag.y(), factor);
+                    try {
+                        draw(gg, tag, s, rankFont, nickFont);
+                    } finally {
+                        Render2D.popTransform(gg);
+                    }
+                } else {
+                    draw(gg, tag, s, rankFont, nickFont);
+                }
             }
         } finally {
             Render2D.end(gg);
