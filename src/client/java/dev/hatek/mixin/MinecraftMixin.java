@@ -6,8 +6,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Minecraft.class)
 public abstract class MinecraftMixin {
@@ -16,13 +14,5 @@ public abstract class MinecraftMixin {
     private boolean hatek$espGlowing(boolean glowing, Entity entity) {
         ShaderEsp esp = ShaderEsp.instance();
         return glowing || (esp != null && esp.shouldHighlight(entity));
-    }
-
-    /** While SuperSpear owns the left click, the ordinary attack / stab of that click is skipped. */
-    @Inject(method = "startAttack", at = @At("HEAD"), cancellable = true)
-    private void hatek$spearOwnsClick(CallbackInfoReturnable<Boolean> cir) {
-        if (dev.hatek.client.module.impl.combat.SuperSpear.ownsAttackClick()) {
-            cir.setReturnValue(false);
-        }
     }
 }

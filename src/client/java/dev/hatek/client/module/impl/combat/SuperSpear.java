@@ -27,8 +27,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Locale;
 
 /**
- * SuperSpear: turn the module on (its own key, a keyboard key or a side mouse button such as MOUSE 4), then hold the
- * left mouse button with a spear in hand while aiming near a player (letting go cancels the rush). The module marks the player nearest to your
+ * SuperSpear: turn the module on (its own key, a keyboard key or a side mouse button such as MOUSE 4), then press the
+ * right mouse button with a spear in hand while aiming near a player. The module marks the player nearest to your
  * crosshair, charges the spear (it only starts to hurt after its charge delay), then rushes through the mark at high
  * speed and checks in the chat whether the server registered the hit.
  *
@@ -73,7 +73,7 @@ public final class SuperSpear extends Module {
     private boolean active;          // true on a tick where the module steers the player
 
     public SuperSpear() {
-        super("SuperSpear", "Hold the left mouse button with a spear aimed at a player: mark, charge, rush through", Category.COMBAT);
+        super("SuperSpear", "Right click with a spear aimed at a player: mark, charge, rush through", Category.COMBAT);
         instance = this;
         with(this.onlyWithSpear, this.speed, this.acceleration, this.packetBoost, this.visibleOnly, this.range, this.cone, this.useDragonFly,
                 this.stabOnContact, this.stopAfter);
@@ -133,8 +133,8 @@ public final class SuperSpear extends Module {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
-        // the module works only while the left mouse button is held (module on, spear in hand, aimed near a player)
-        boolean down = mc.options.keyAttack.isDown();
+        // the trigger is a right click (use) with the module on, aimed near a player
+        boolean down = mc.options.keyUse.isDown();
         boolean pressed = down && !this.keyWas && mc.gui.screen() == null;
         this.keyWas = down;
 
@@ -161,12 +161,6 @@ public final class SuperSpear extends Module {
             return;
         }
         this.lowestHealth = Math.min(this.lowestHealth, healthOf(this.target));
-        if (!down && (this.phase == Phase.PREPARE || this.phase == Phase.DASH)) {
-            // the left button was let go: no more rush
-            message("ЛКМ отпущена, удар отменён.");
-            finishStop(player);
-            return;
-        }
 
         switch (this.phase) {
             case PREPARE -> prepare(player, mc);
@@ -175,25 +169,6 @@ public final class SuperSpear extends Module {
             default -> {
             }
         }
-    }
-
-    /**
-     * True while the left click belongs to SuperSpear: the module is running, or it is on with a spear in hand and a
-     * visible player near the crosshair. The ordinary attack is skipped then so the click does not stab by itself.
-     */
-    public static boolean ownsAttackClick() {
-        SuperSpear self = instance;
-        Minecraft mc = Minecraft.getInstance();
-        if (self == null || !self.isEnabled() || mc.player == null || mc.level == null || mc.gui.screen() != null) {
-            return false;
-        }
-        if (self.phase != Phase.IDLE) {
-            return true;
-        }
-        if (self.onlyWithSpear.value() && !mc.player.getMainHandItem().is(ItemTags.SPEARS)) {
-            return false;
-        }
-        return findSpear(mc.player) >= 0 && self.findTarget(mc.player) != null;
     }
 
     private void start(LocalPlayer player) {
