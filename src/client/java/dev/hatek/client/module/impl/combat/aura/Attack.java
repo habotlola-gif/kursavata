@@ -254,7 +254,7 @@ public final class Attack {
             return true;
         }
         if (!AttackAura.extra(AttackAura.SMART_CRITS)) {
-            return false;
+            return true;    // smart crits are off: hit as soon as the cooldown allows
         }
         if (critImpossible()) {
             return true;
