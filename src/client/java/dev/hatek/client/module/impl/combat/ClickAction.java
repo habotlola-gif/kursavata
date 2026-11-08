@@ -8,6 +8,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
@@ -22,6 +24,7 @@ public final class ClickAction extends Module {
     private final KeySetting windKey = new KeySetting("Заряд ветра (клавиша)", -1);
     private final BoolSetting swapBack = new BoolSetting("Вернуть прошлый слот", true);
     private final BoolSetting fromInventory = new BoolSetting("Брать и из инвентаря (не только хотбар)", true);
+    private final BoolSetting debug = new BoolSetting("Писать в чат, что происходит (отладка)", true);
     private final BoolSetting notify = new BoolSetting("Сообщать, если предмета нет", true);
 
     private boolean pearlWas;
@@ -29,7 +32,7 @@ public final class ClickAction extends Module {
 
     public ClickAction() {
         super("ClickAction", "Keys that throw an ender pearl or a wind charge at once", Category.COMBAT);
-        with(this.pearlKey, this.windKey, this.swapBack, this.fromInventory, this.notify);
+        with(this.pearlKey, this.windKey, this.swapBack, this.fromInventory, this.notify, this.debug);
     }
 
     @Override
@@ -53,6 +56,9 @@ public final class ClickAction extends Module {
                 && !(mc.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>))) {
             return;
         }
+        if ((pearlPressed || windPressed) && this.debug.value()) {
+            say(player, "нажата клавиша " + (pearlPressed ? "жемчуга" : "заряда ветра") + ", модуль работает");
+        }
         if (pearlPressed) {
             throwItem(player, mc, Items.ENDER_PEARL, "жемчуга эндера");
         }
@@ -61,10 +67,23 @@ public final class ClickAction extends Module {
         }
     }
 
+    private void say(LocalPlayer player, String text) {
+        player.sendSystemMessage(Component.literal("§bClickAction: §f" + text));
+    }
+
+    private void report(LocalPlayer player, String where, InteractionResult result, Item item) {
+        if (!this.debug.value()) {
+            return;
+        }
+        String cooldown = player.getCooldowns().isOnCooldown(new ItemStack(item)) ? ", предмет на кулдауне" : "";
+        say(player, where + " -> " + result.getClass().getSimpleName() + cooldown);
+    }
+
     private void throwItem(LocalPlayer player, Minecraft mc, Item item, String label) {
         if (player.getOffhandItem().is(item)) {
-            mc.gameMode.useItem(player, InteractionHand.OFF_HAND);
+            InteractionResult result = mc.gameMode.useItem(player, InteractionHand.OFF_HAND);
             player.swing(InteractionHand.OFF_HAND);
+            report(player, "левая рука", result, item);
             return;
         }
         int slot = -1;
@@ -77,7 +96,7 @@ public final class ClickAction extends Module {
         if (slot < 0 && this.fromInventory.value()) {
             for (int i = 9; i < 36; i++) {
                 if (player.getInventory().getItem(i).is(item)) {
-                    throwFromInventory(player, mc, i);
+                    throwFromInventory(player, mc, i, item);
                     return;
                 }
             }
@@ -90,20 +109,22 @@ public final class ClickAction extends Module {
         }
         int previous = player.getInventory().getSelectedSlot();
         player.getInventory().setSelectedSlot(slot);
-        mc.gameMode.useItem(player, InteractionHand.MAIN_HAND);
+        InteractionResult result = mc.gameMode.useItem(player, InteractionHand.MAIN_HAND);
         player.swing(InteractionHand.MAIN_HAND);
+        report(player, "хотбар, слот " + (slot + 1), result, item);
         if (this.swapBack.value() && previous != slot) {
             player.getInventory().setSelectedSlot(previous);
         }
     }
 
     /** The item sits in the main inventory: swap it into the selected hotbar slot, use it, swap it back. */
-    private void throwFromInventory(LocalPlayer player, Minecraft mc, int inventorySlot) {
+    private void throwFromInventory(LocalPlayer player, Minecraft mc, int inventorySlot, Item item) {
         int selected = player.getInventory().getSelectedSlot();
         int container = player.inventoryMenu.containerId;
         mc.gameMode.handleContainerInput(container, inventorySlot, selected, ContainerInput.SWAP, (Player) player);
-        mc.gameMode.useItem(player, InteractionHand.MAIN_HAND);
+        InteractionResult result = mc.gameMode.useItem(player, InteractionHand.MAIN_HAND);
         player.swing(InteractionHand.MAIN_HAND);
+        report(player, "инвентарь, слот " + inventorySlot, result, item);
         mc.gameMode.handleContainerInput(container, inventorySlot, selected, ContainerInput.SWAP, (Player) player);
     }
 }
