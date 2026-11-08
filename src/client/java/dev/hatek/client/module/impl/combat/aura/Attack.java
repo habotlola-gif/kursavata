@@ -525,7 +525,12 @@ public final class Attack {
         float serverPitch = ServerView.pitch(mc.player.getXRot());
         return String.format(java.util.Locale.ROOT,
                 "дальность=%s перезарядка=%s пауза-между-ударами=%s заряд=%s подходящий-момент=%s ЛУЧ=%s | серверный yaw/pitch %.1f/%.1f, у тебя %.1f/%.1f",
-                distance, cooldown, gap, charge, moment, ray, serverYaw, serverPitch, mc.player.getYRot(), mc.player.getXRot());
+                distance, cooldown, gap, charge, moment, ray, serverYaw, serverPitch, mc.player.getYRot(), mc.player.getXRot())
+                + String.format(java.util.Locale.ROOT,
+                " || сила удара=%.2f (нужно >%.2f), скорость атаки=%.2f, таймер=%d мс из %d мс, на земле=%s, падение=%.2f (крит от %.2f), умные-криты=%s, в руке=%s",
+                mc.player.getAttackStrengthScale(0.5F), chargeFloor(), mc.player.getAttributeValue(Attributes.ATTACK_SPEED),
+                COOLDOWN_TIMER.elapsedTime(), attackInterval(), mc.player.onGround(), mc.player.fallDistance, critFallHeight,
+                AttackAura.extra(AttackAura.SMART_CRITS), mc.player.getMainHandItem().getHoverName().getString());
     }
 
     public static boolean shouldAttack(LivingEntity livingTarget, boolean rayCast,
