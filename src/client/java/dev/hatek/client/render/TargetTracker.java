@@ -14,7 +14,6 @@ public final class TargetTracker {
     private static final double MAX_DISTANCE = 12.0;
     private static @Nullable LivingEntity lastHit;
     private static long lastHitAt;
-    private static int hitCounter;
 
     private TargetTracker() {
     }
@@ -23,13 +22,8 @@ public final class TargetTracker {
         if (target instanceof LivingEntity living && !(target instanceof ArmorStand)) {
             lastHit = living;
             lastHitAt = System.currentTimeMillis();
-            hitCounter++;
+            dev.hatek.client.module.impl.render.Particles.onAttack(living);
         }
-    }
-
-    /** Grows by one with every attack on a living entity (lets effects react to hits). */
-    public static int hitCounter() {
-        return hitCounter;
     }
 
     public static @Nullable LivingEntity current() {

@@ -2,14 +2,12 @@ package dev.hatek.client.module.impl.render;
 
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
-import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ColorSetting;
 import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.render.CrystalsEsp;
 import dev.hatek.client.render.LightningEsp;
 import dev.hatek.client.render.SoulsEsp;
-import dev.hatek.client.render.StarsEsp;
 import dev.hatek.client.render.TargetTracker;
 import dev.hatek.client.render.WorldProjection;
 import dev.hatek.client.ui.render.Render2D;
@@ -33,10 +31,6 @@ public final class TargetEsp extends Module {
     private final SliderSetting trail = new SliderSetting("Trail length (%)", 100.0, 30.0, 200.0, 5.0);
     private final SliderSetting speed = new SliderSetting("Speed", 1.0, 0.3, 3.0, 0.1);
 
-    private final BoolSetting stars = new BoolSetting("Stars (sparkles around the target)", true);
-    private final SliderSetting starRate = new SliderSetting("Stars per second", 7.0, 1.0, 30.0, 1.0);
-
-    private int seenHits = TargetTracker.hitCounter();
     private float alpha;
     private LivingEntity shown;
     private long lastFrame = System.nanoTime();
@@ -44,8 +38,7 @@ public final class TargetEsp extends Module {
     public TargetEsp() {
         super("TargetESP", "Effect around the target you are fighting", Category.RENDER);
         instance = this;
-        with(this.mode, this.color, this.size, this.thickness, this.glow, this.speed, this.souls, this.trail, this.stars,
-                this.starRate);
+        with(this.mode, this.color, this.size, this.thickness, this.glow, this.speed, this.souls, this.trail);
     }
 
     public static TargetEsp instance() {
@@ -68,13 +61,9 @@ public final class TargetEsp extends Module {
             this.shown = target;
         }
         this.alpha += ((target != null ? 1.0f : 0.0f) - this.alpha) * (1.0f - (float) Math.exp(-seconds * 10.0f));
-        int hits = TargetTracker.hitCounter();
-        int newHits = Math.min(hits - this.seenHits, 3);
-        this.seenHits = hits;
         if (this.alpha < 0.01f || this.shown == null || !this.shown.isAlive()) {
             if (this.alpha < 0.01f) {
                 this.shown = null;
-                StarsEsp.clear();
             }
             return;
         }
@@ -99,12 +88,6 @@ public final class TargetEsp extends Module {
                 LightningEsp.render(gg, this.shown, base, time, this.color.value(), partial,
                         (float) this.size.value() / 100.0f, (float) this.thickness.value() / 100.0f,
                         (float) this.glow.value() / 100.0f);
-            }
-            if (this.stars.value()) {
-                // stars live in the same alpha as the effect; every hit sends a burst
-                boolean visible = mc.player.hasLineOfSight(this.shown);
-                StarsEsp.render(gg, this.shown, base, seconds, (float) this.starRate.value(), Math.max(0, newHits) * 9,
-                        (float) this.size.value() / 100.0f, (float) this.glow.value() / 100.0f, visible ? 1.0f : 0.5f, 1.0f);
             }
             Render2D.popAlpha();
         } finally {
