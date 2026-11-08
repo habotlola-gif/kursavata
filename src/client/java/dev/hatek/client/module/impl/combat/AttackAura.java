@@ -447,7 +447,7 @@ public final class AttackAura extends Module {
                 true, 0L, ranges);
 
         if (!canAttack) {
-            why("Attack.shouldAttack = нет (перезарядка, дальность или удар по лучу не проходит)");
+            why("Attack.shouldAttack = нет: " + Attack.explain(target, ranges));
             return;
         }
 

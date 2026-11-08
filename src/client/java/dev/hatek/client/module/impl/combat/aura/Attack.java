@@ -512,6 +512,22 @@ public final class Attack {
                 || target.clip(eyes, eyes.add(look.scale(range + 0.5))).isPresent();
     }
 
+    /** Which of the parts of shouldAttack fail right now (for the aura's debug output). */
+    public static String explain(LivingEntity target, float[] ranges) {
+        Minecraft mc = mc();
+        boolean distance = AuraUtil.validDistance(target, ranges[0], true);
+        boolean cooldown = msCooldownReached(0L);
+        boolean gap = attackTickGapReached();
+        boolean charge = chargeReached();
+        boolean moment = isBestMomentToHit(true);
+        boolean ray = anyEntityOnRay(target, ranges[0]);
+        float serverYaw = Mth.wrapDegrees(ServerView.yaw(mc.player.getYRot()));
+        float serverPitch = ServerView.pitch(mc.player.getXRot());
+        return String.format(java.util.Locale.ROOT,
+                "дальность=%s перезарядка=%s пауза-между-ударами=%s заряд=%s подходящий-момент=%s ЛУЧ=%s | серверный yaw/pitch %.1f/%.1f, у тебя %.1f/%.1f",
+                distance, cooldown, gap, charge, moment, ray, serverYaw, serverPitch, mc.player.getYRot(), mc.player.getXRot());
+    }
+
     public static boolean shouldAttack(LivingEntity livingTarget, boolean rayCast,
                                        boolean distanceCheck, boolean fallCheck,
                                        long cooldownMSOffset, float[] ranges) {
