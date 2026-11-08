@@ -62,6 +62,7 @@ public final class Attack {
     private static final AttackPace PACE = new AttackPace();
 
     private static boolean auraAttacking;
+    private static boolean freeStrike;
 
     private static long extraCooldown;
 
@@ -322,6 +323,37 @@ public final class Attack {
         return mc.player.getY() < mc.player.yo - 0.05 && mc.player.fallDistance > SMASH_FALL;
     }
 
+    /**
+     * The new attack core: hits right now, without the random pauses of the classic pacing (the caller decides when
+     * the hit is ready). Returns false if there was nothing to hit.
+     */
+    public static boolean strike(LivingEntity livingIn, Runnable preHit, Runnable postHit, InteractionHand hand) {
+        Minecraft mc = mc();
+        if (preHit != null) {
+            preHit.run();
+        }
+        boolean hit = livingIn != null && mc.gameMode != null && mc.player != null;
+        if (hit) {
+            freeStrike = true;
+            try {
+                mc.gameMode.attack(mc.player, livingIn);
+            } finally {
+                freeStrike = false;
+            }
+            attackedLastTick = true;
+            if (hand != null) {
+                mc.player.swing(hand);
+            }
+            COOLDOWN_TIMER.reset();
+            critFallHeight = nextCritFallHeight();
+            sprintLead = nextSprintLead();
+        }
+        if (postHit != null) {
+            postHit.run();
+        }
+        return hit;
+    }
+
     public static boolean useEntity(LivingEntity livingIn, Runnable preHit, Runnable postHit,
                                     InteractionHand hand, boolean cpsBypass) {
         Minecraft mc = mc();
@@ -450,6 +482,10 @@ public final class Attack {
     public static boolean allowAttack() {
         Minecraft mc = mc();
         if (mc.player == null) {
+            return true;
+        }
+        if (freeStrike) {
+            PACE.markAura(mc.player.tickCount);
             return true;
         }
         if (auraAttacking) {

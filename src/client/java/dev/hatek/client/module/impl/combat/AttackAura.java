@@ -97,6 +97,13 @@ public final class AttackAura extends Module {
             LEGIT_SPRINT, SMART_CRITS, SLOW_TURN);
 
     private final SliderSetting holdMargin = new SliderSetting("Hold target beyond range (blocks)", 1.5, 0.0, 3.0, 0.25);
+    private final ModeSetting attackCore = new ModeSetting("Attack core", 0, "New (max damage)", "Classic (humanized)");
+    private final SliderSetting minCharge = new SliderSetting("New: min charge before a hit (%)", 96.0, 70.0, 100.0, 1.0);
+    private final ModeSetting critMode = new ModeSetting("New: crits", 1, "Off (hit at once)", "Smart (wait for the fall in the air)");
+    private final ModeSetting priority = new ModeSetting("Target priority", 0, "Distance", "Health", "Armor", "Crosshair");
+    private final SliderSetting targetFov = new SliderSetting("Target FOV (degrees)", 120.0, 30.0, 360.0, 5.0);
+    private int airWaitTicks;
+    private int lastStrikeTick = -10;
     private final BoolSetting debug = new BoolSetting("Debug: писать в чат, почему не бьёт", false);
     private long lastDebugAt;
     private final BoolSetting chargeSpread = new BoolSetting("Charge Spread", true);
@@ -122,8 +129,10 @@ public final class AttackAura extends Module {
         keybind(GLFW.GLFW_KEY_R);
         with(this.attackRange, this.preRange, this.movementType, this.rotationMode, this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.targets, this.misc,
-                this.extras, this.holdMargin, this.debug, this.chargeSpread);
+                this.extras, this.holdMargin, this.attackCore, this.minCharge, this.critMode, this.priority, this.targetFov, this.debug, this.chargeSpread);
 
+        this.minCharge.visibleIf(AttackAura::newCore);
+        this.critMode.visibleIf(AttackAura::newCore);
         this.neuralChaos.visibleIf(AttackAura::neuralRotation);
         this.neuralAssist.visibleIf(AttackAura::neuralRotation);
         // the Smooth Rotation settings exist only while that rotation is selected
@@ -356,6 +365,10 @@ public final class AttackAura extends Module {
         return instance != null && !smoothRotation() && !neuralRotation();
     }
 
+    public static boolean newCore() {
+        return instance == null || instance.attackCore.is("New (max damage)");
+    }
+
     public static boolean neuralRotation() {
         return instance != null && instance.rotationMode.is(ROT_NEURAL);
     }
@@ -440,30 +453,37 @@ public final class AttackAura extends Module {
         float[] ranges = new float[]{base[0], base[1], base[0] + base[1]};
 
         boolean canPacket = packetSprint();
+        boolean fresh = newCore();
 
-        Attack.antiMissesHittingUpdate(target, true, isRayCastRuleToAttack(), false);
+        if (fresh) {
+            if (!newCoreReady(mc)) {
+                return;
+            }
+        } else {
+            Attack.antiMissesHittingUpdate(target, true, isRayCastRuleToAttack(), false);
 
-        boolean canAttack = Attack.shouldAttack(target, isRayCastRuleToAttack(), true,
-                true, 0L, ranges);
+            boolean canAttack = Attack.shouldAttack(target, isRayCastRuleToAttack(), true,
+                    true, 0L, ranges);
 
-        if (!canAttack) {
-            why("Attack.shouldAttack = нет: " + Attack.explain(target, ranges));
-            return;
-        }
+            if (!canAttack) {
+                why("Attack.shouldAttack = нет: " + Attack.explain(target, ranges));
+                return;
+            }
 
-        if (!aimedNow()) {
-            why("не наведён на цель (голова ещё не на хитбоксе)");
-            return;
-        }
+            if (!aimedNow()) {
+                why("не наведён на цель (голова ещё не на хитбоксе)");
+                return;
+            }
 
-        if (!SpaceTime.settled()) {
-            why("ждёт settled");
-            return;
-        }
+            if (!SpaceTime.settled()) {
+                why("ждёт settled");
+                return;
+            }
 
-        if (!canPacket && (serverSprinting || mc.player.isSprinting()) && Attack.critPending()) {
-            why("ждёт крит (сброс спринта)");
-            return;
+            if (!canPacket && (serverSprinting || mc.player.isSprinting()) && Attack.critPending()) {
+                why("ждёт крит (сброс спринта)");
+                return;
+            }
         }
 
         Runnable[] shieldBreak = Attack.hitShieldBreakTaskForUse(target, misc(BREAK_SHIELD));
@@ -491,7 +511,49 @@ public final class AttackAura extends Module {
             mc.options.keySprint.setDown(false);
         }
 
-        Attack.useEntity(target, preHit, postHit, InteractionHand.MAIN_HAND, true);
+        if (fresh) {
+            if (Attack.strike(target, preHit, postHit, InteractionHand.MAIN_HAND)) {
+                this.lastStrikeTick = mc.player.tickCount;
+                this.airWaitTicks = 0;
+            }
+        } else {
+            Attack.useEntity(target, preHit, postHit, InteractionHand.MAIN_HAND, true);
+        }
+    }
+
+    /**
+     * The new attack core: a hit goes out when (1) the target is in reach, (2) the ray from the angle the server knows
+     * really crosses its hitbox, (3) the weapon is charged and (4) the crit rule allows it. No random waiting.
+     */
+    private boolean newCoreReady(Minecraft mc) {
+        if (mc.player.tickCount == this.lastStrikeTick) {
+            return false;
+        }
+        if (!Attack.anyEntityOnRay(target, attackRange())) {
+            why("луч не попадает по хитбоксу цели (голова ещё не там)");
+            return false;
+        }
+        float charge = mc.player.getAttackStrengthScale(0.5F);
+        float need = (float) this.minCharge.value() / 100.0F;
+        if (charge < need) {
+            why(String.format(java.util.Locale.ROOT, "оружие заряжено на %.0f%% из %.0f%%", charge * 100.0F, need * 100.0F));
+            return false;
+        }
+        if (this.critMode.value().startsWith("Smart")) {
+            boolean inAir = !mc.player.onGround() && !mc.player.onClimbable() && !mc.player.isInWater()
+                    && !mc.player.isInLava() && !mc.player.isPassenger() && !mc.player.getAbilities().flying;
+            boolean falling = mc.player.fallDistance > 0.0F && mc.player.getDeltaMovement().y < 0.0;
+            if (!inAir) {
+                this.airWaitTicks = 0;
+            }
+            if (inAir && !falling && this.airWaitTicks < 8) {
+                // rising: a crit comes with the fall; wait a little, but never longer than 8 ticks
+                this.airWaitTicks++;
+                why("ждёт падения для крита (макс. 8 тиков)");
+                return false;
+            }
+        }
+        return true;
     }
 
     private void updateRotation() {
@@ -509,18 +571,25 @@ public final class AttackAura extends Module {
     private void updateTarget() {
         Minecraft mc = mc();
         LivingEntity best = null;
-        double bestDistance = Double.MAX_VALUE;
+        double bestScore = Double.MAX_VALUE;
+        float fov = (float) this.targetFov.value() / 2.0F;
 
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof LivingEntity living) || !isValidTarget(living)) {
                 continue;
             }
-            if (AuraUtil.calculateFOVFromCamera(living) > ACQUIRE_FOV) {
+            double fromCamera = AuraUtil.calculateFOVFromCamera(living);
+            if (this.targetFov.value() < 360.0 && fromCamera > fov) {
                 continue;
             }
-            double distance = mc.player.distanceToSqr(living);
-            if (distance < bestDistance) {
-                bestDistance = distance;
+            double score = switch (this.priority.value()) {
+                case "Health" -> living.getHealth() + living.getAbsorptionAmount();
+                case "Armor" -> living.getArmorValue() * 100.0 + mc.player.distanceToSqr(living);
+                case "Crosshair" -> fromCamera;
+                default -> mc.player.distanceToSqr(living);
+            };
+            if (score < bestScore) {
+                bestScore = score;
                 best = living;
             }
         }
