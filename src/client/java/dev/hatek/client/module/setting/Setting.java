@@ -15,9 +15,17 @@ public abstract class Setting {
         return this.name;
     }
 
+    private java.util.function.BooleanSupplier visibleWhen;
+
+    /** Shows this setting only while the condition holds (it stays saved with configs either way). */
+    public Setting visibleIf(java.util.function.BooleanSupplier condition) {
+        this.visibleWhen = condition;
+        return this;
+    }
+
     /** Hidden settings are saved with configs but take no space in the menu. */
     public boolean hidden() {
-        return false;
+        return this.visibleWhen != null && !this.visibleWhen.getAsBoolean();
     }
 
     public abstract float bottomOffset();

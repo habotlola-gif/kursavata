@@ -118,6 +118,12 @@ public final class AttackAura extends Module {
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.targets, this.misc,
                 this.extras, this.chargeSpread);
 
+        // the Smooth Rotation settings exist only while that rotation is selected
+        for (dev.hatek.client.module.setting.Setting setting : List.of(this.smoothSpeed, this.smoothJerk,
+                this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir)) {
+            setting.visibleIf(AttackAura::smoothRotation);
+        }
+
         ComponentManager.getInstance().init();
     }
 
