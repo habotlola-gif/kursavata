@@ -28,13 +28,14 @@ public final class SoulsEsp {
         double height = entity.getBbHeight();
         double radius = Math.max(0.75, entity.getBbWidth() * 1.3) * sizeMul;
         double trailSeconds = 0.85 * trailMul;
-        double worldSize = 0.21 * thicknessMul;                       // head width in blocks
+        double worldSize = 0.25 * thicknessMul;                       // head width in blocks
         double fov = Math.toRadians(mc.options.fov().get());
         double pixelsPerUnit = Render2D.screenHeight() / (2.0 * Math.tan(fov / 2.0));
-        double maxWidth = 110.0 * thicknessMul;
+        double maxWidth = 150.0 * thicknessMul;
 
         int bodyColor = 0xFF000000 | (color & 0xFFFFFF);
-        int coreColor = Render2D.lerp(bodyColor, 0xFFFFFFFF, 0.65f);
+        int lightBody = Render2D.lerp(bodyColor, 0xFFFFFFFF, 0.35f);
+        int coreColor = Render2D.lerp(bodyColor, 0xFFFFFFFF, 0.8f);
 
         for (int soul = 0; soul < souls; soul++) {
             double phase = soul * Math.PI * 2.0 / souls;
@@ -48,27 +49,29 @@ public final class SoulsEsp {
                     continue;
                 }
                 double distance = Math.max(0.3, point.distanceTo(camera));
-                double width = worldSize * pixelsPerUnit / distance * (0.02 + 0.98 * Math.pow(fade, 0.85));
+                double width = worldSize * pixelsPerUnit / distance * (0.03 + 0.97 * Math.pow(fade, 0.65));
                 pts[k] = new float[]{screen[0], screen[1], (float) Math.min(width, maxWidth), fade};
             }
-            // soft edge, coloured body, white core
-            ribbon(gg, pts, 2.1f, bodyColor, 0.30f * visibility * Math.min(1.0f, 0.4f + glow), 0.9f);
-            ribbon(gg, pts, 1.0f, coreColor, 0.95f * visibility, 0.6f);
-            ribbon(gg, pts, 0.38f, 0xFFFFFFFF, 0.85f * visibility, 0.8f);
+            // soft edge, light body, white core
+            ribbon(gg, pts, 1.9f, bodyColor, 0.22f * visibility * Math.min(1.0f, 0.4f + glow), 0.9f);
+            ribbon(gg, pts, 1.2f, lightBody, 0.92f * visibility, 0.7f);
+            ribbon(gg, pts, 0.55f, coreColor, 0.90f * visibility, 0.7f);
 
             if (glow > 0.0f) {
-                // soft halo along the trail (every third sample) and a bigger one on the head
-                for (int k = POINTS - 1; k >= 1; k -= 3) {
+                // soft halo along the trail (every second sample) and a light one on the head
+                for (int k = POINTS - 1; k >= 1; k -= 2) {
                     float[] p = pts[k];
                     if (p != null) {
-                        Render2D.glow(gg, p[0], p[1], Math.max(10.0f, p[2] * 4.5f),
-                                Render2D.withAlpha(bodyColor, Mth.clamp(0.20f * glow * visibility * p[3], 0.0f, 1.0f)));
+                        Render2D.glow(gg, p[0], p[1], Math.max(12.0f, p[2] * 4.5f),
+                                Render2D.withAlpha(bodyColor, Mth.clamp(0.13f * glow * visibility * p[3], 0.0f, 1.0f)));
                     }
                 }
                 float[] head = pts[0];
                 if (head != null) {
-                    Render2D.glow(gg, head[0], head[1], Math.max(24.0f, head[2] * 6.0f),
-                            Render2D.withAlpha(bodyColor, Mth.clamp(0.55f * glow * visibility, 0.0f, 1.0f)));
+                    Render2D.glow(gg, head[0], head[1], Math.max(26.0f, head[2] * 5.5f),
+                            Render2D.withAlpha(lightBody, Mth.clamp(0.42f * glow * visibility, 0.0f, 1.0f)));
+                    Render2D.glow(gg, head[0], head[1], Math.max(12.0f, head[2] * 2.4f),
+                            Render2D.withAlpha(0xFFFFFFFF, Mth.clamp(0.6f * glow * visibility, 0.0f, 1.0f)));
                 }
             }
         }
