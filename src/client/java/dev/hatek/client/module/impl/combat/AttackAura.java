@@ -98,6 +98,10 @@ public final class AttackAura extends Module {
 
     private final SliderSetting holdMargin = new SliderSetting("Hold target beyond range (blocks)", 1.5, 0.0, 3.0, 0.25);
     private final ModeSetting attackCore = new ModeSetting("Attack core", 0, "New (max damage)", "Classic (humanized)");
+    private final ModeSetting rhythm = new ModeSetting("New: hit rhythm", 0, "Human (as recorded from you)", "Max (every cooldown)");
+    private static final int[] GAP_TICKS = {1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39};
+    private static final int[] GAP_COUNT = {1, 7, 4, 6, 12, 8, 16, 19, 47, 138, 131, 87, 45, 31, 20, 27, 14, 17, 16, 11, 14, 9, 7, 4, 4, 1, 1, 4, 1, 2, 1, 1, 1, 1, 1, 3, 1, 1};
+    private int hitGap = 12;
     private final SliderSetting minCharge = new SliderSetting("New: min charge before a hit (%)", 96.0, 70.0, 100.0, 1.0);
     private final ModeSetting critMode = new ModeSetting("New: crits", 1, "Off (hit at once)", "Smart (wait for the fall in the air)");
     private final ModeSetting priority = new ModeSetting("Target priority", 0, "Distance", "Health", "Armor", "Crosshair");
@@ -133,8 +137,9 @@ public final class AttackAura extends Module {
         keybind(GLFW.GLFW_KEY_R);
         with(this.attackRange, this.preRange, this.movementType, this.rotationMode, this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.targets, this.misc,
-                this.extras, this.holdMargin, this.attackCore, this.minCharge, this.critMode, this.critChance, this.reachSafety, this.priority, this.targetFov, this.debug, this.chargeSpread);
+                this.extras, this.holdMargin, this.attackCore, this.rhythm, this.minCharge, this.critMode, this.critChance, this.reachSafety, this.priority, this.targetFov, this.debug, this.chargeSpread);
 
+        this.rhythm.visibleIf(AttackAura::newCore);
         this.minCharge.visibleIf(AttackAura::newCore);
         this.critMode.visibleIf(AttackAura::newCore);
         this.critChance.visibleIf(AttackAura::newCore);
@@ -522,6 +527,7 @@ public final class AttackAura extends Module {
         if (fresh) {
             if (Attack.strike(target, preHit, postHit, InteractionHand.MAIN_HAND)) {
                 this.lastStrikeTick = mc.player.tickCount;
+                this.hitGap = sampleGap();
                 this.airWaitTicks = 0;
                 this.groundWaitTicks = 0;
                 // a real player does not crit every time: the next hit is a crit only with the given chance
@@ -536,6 +542,21 @@ public final class AttackAura extends Module {
      * The new attack core: a hit goes out when (1) the target is in reach, (2) the ray from the angle the server knows
      * really crosses its hitbox, (3) the weapon is charged and (4) the crit rule allows it. No random waiting.
      */
+    private static int sampleGap() {
+        int total = 0;
+        for (int c : GAP_COUNT) {
+            total += c;
+        }
+        int roll = java.util.concurrent.ThreadLocalRandom.current().nextInt(total);
+        for (int i = 0; i < GAP_COUNT.length; i++) {
+            roll -= GAP_COUNT[i];
+            if (roll < 0) {
+                return GAP_TICKS[i];
+            }
+        }
+        return 12;
+    }
+
     private boolean newCoreReady(Minecraft mc) {
         if (mc.player.tickCount == this.lastStrikeTick) {
             return false;
@@ -565,10 +586,24 @@ public final class AttackAura extends Module {
             return false;
         }
         float charge = mc.player.getAttackStrengthScale(0.5F);
-        float need = (float) this.minCharge.value() / 100.0F;
-        if (charge < need) {
-            why(String.format(java.util.Locale.ROOT, "оружие заряжено на %.0f%% из %.0f%%", charge * 100.0F, need * 100.0F));
-            return false;
+        if (this.rhythm.value().startsWith("Human")) {
+            // the rhythm of the player's own recorded fights: the pause before the next swing is drawn from their
+            // distribution (mostly 11-12 ticks, but from 3 to almost 40), hits before a full charge included
+            int since = mc.player.tickCount - this.lastStrikeTick;
+            if (since < this.hitGap) {
+                why(String.format(java.util.Locale.ROOT, "ритм: пауза %d из %d тиков", since, this.hitGap));
+                return false;
+            }
+            if (charge < 0.55F) {
+                why(String.format(java.util.Locale.ROOT, "оружие заряжено на %.0f%% (минимум 55%%)", charge * 100.0F));
+                return false;
+            }
+        } else {
+            float need = (float) this.minCharge.value() / 100.0F;
+            if (charge < need) {
+                why(String.format(java.util.Locale.ROOT, "оружие заряжено на %.0f%% из %.0f%%", charge * 100.0F, need * 100.0F));
+                return false;
+            }
         }
         if (this.critMode.value().startsWith("Smart") && this.critWanted) {
             boolean inAir = !mc.player.onGround() && !mc.player.onClimbable() && !mc.player.isInWater()
