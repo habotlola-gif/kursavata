@@ -112,6 +112,7 @@ public final class AttackAura extends Module {
     private int groundWaitTicks;
     private int lastStrikeTick = -10;
     private final SliderSetting reachSafety = new SliderSetting("New: reach safety (blocks)", 0.15, 0.0, 0.6, 0.05);
+    private final BoolSetting advanced = new BoolSetting("Advanced settings", false);
     private final BoolSetting debug = new BoolSetting("Debug: писать в чат, почему не бьёт", false);
     private long lastDebugAt;
     private final BoolSetting chargeSpread = new BoolSetting("Charge Spread", true);
@@ -135,21 +136,30 @@ public final class AttackAura extends Module {
                 Category.COMBAT);
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
-        with(this.attackRange, this.preRange, this.movementType, this.rotationMode, this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
-                this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.targets, this.misc,
-                this.extras, this.holdMargin, this.attackCore, this.rhythm, this.minCharge, this.critMode, this.critChance, this.reachSafety, this.priority, this.targetFov, this.debug, this.chargeSpread);
+        // main screen: the few things that matter; everything else sits behind "Advanced settings"
+        with(this.attackRange, this.rotationMode, this.movementType, this.targets, this.targetFov, this.priority,
+                this.critMode, this.advanced,
+                this.preRange, this.misc, this.extras, this.attackCore, this.rhythm, this.minCharge, this.critChance,
+                this.reachSafety, this.holdMargin, this.chargeSpread,
+                this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
+                this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.debug);
 
-        this.rhythm.visibleIf(AttackAura::newCore);
-        this.minCharge.visibleIf(AttackAura::newCore);
         this.critMode.visibleIf(AttackAura::newCore);
-        this.critChance.visibleIf(AttackAura::newCore);
-        this.reachSafety.visibleIf(AttackAura::newCore);
-        this.neuralChaos.visibleIf(AttackAura::neuralRotation);
-        this.neuralAssist.visibleIf(AttackAura::neuralRotation);
+        for (dev.hatek.client.module.setting.Setting setting : List.of(this.preRange, this.misc, this.extras,
+                this.attackCore, this.holdMargin, this.chargeSpread, this.debug)) {
+            setting.visibleIf(this.advanced::value);
+        }
+        for (dev.hatek.client.module.setting.Setting setting : List.of(this.rhythm, this.minCharge, this.critChance,
+                this.reachSafety)) {
+            setting.visibleIf(() -> this.advanced.value() && newCore());
+        }
+        for (dev.hatek.client.module.setting.Setting setting : List.of(this.neuralChaos, this.neuralAssist)) {
+            setting.visibleIf(() -> this.advanced.value() && neuralRotation());
+        }
         // the Smooth Rotation settings exist only while that rotation is selected
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir)) {
-            setting.visibleIf(AttackAura::smoothRotation);
+            setting.visibleIf(() -> this.advanced.value() && smoothRotation());
         }
 
         ComponentManager.getInstance().init();
