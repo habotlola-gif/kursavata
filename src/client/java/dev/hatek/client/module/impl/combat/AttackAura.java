@@ -107,6 +107,7 @@ public final class AttackAura extends Module {
     private int airWaitTicks;
     private int groundWaitTicks;
     private int lastStrikeTick = -10;
+    private final SliderSetting reachSafety = new SliderSetting("New: reach safety (blocks)", 0.15, 0.0, 0.6, 0.05);
     private final BoolSetting debug = new BoolSetting("Debug: писать в чат, почему не бьёт", false);
     private long lastDebugAt;
     private final BoolSetting chargeSpread = new BoolSetting("Charge Spread", true);
@@ -132,11 +133,12 @@ public final class AttackAura extends Module {
         keybind(GLFW.GLFW_KEY_R);
         with(this.attackRange, this.preRange, this.movementType, this.rotationMode, this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.targets, this.misc,
-                this.extras, this.holdMargin, this.attackCore, this.minCharge, this.critMode, this.critChance, this.priority, this.targetFov, this.debug, this.chargeSpread);
+                this.extras, this.holdMargin, this.attackCore, this.minCharge, this.critMode, this.critChance, this.reachSafety, this.priority, this.targetFov, this.debug, this.chargeSpread);
 
         this.minCharge.visibleIf(AttackAura::newCore);
         this.critMode.visibleIf(AttackAura::newCore);
         this.critChance.visibleIf(AttackAura::newCore);
+        this.reachSafety.visibleIf(AttackAura::newCore);
         this.neuralChaos.visibleIf(AttackAura::neuralRotation);
         this.neuralAssist.visibleIf(AttackAura::neuralRotation);
         // the Smooth Rotation settings exist only while that rotation is selected
@@ -536,6 +538,26 @@ public final class AttackAura extends Module {
      */
     private boolean newCoreReady(Minecraft mc) {
         if (mc.player.tickCount == this.lastStrikeTick) {
+            return false;
+        }
+        // reach with a safety margin: the server measures to where the target really is, which is ahead of what is on
+        // the screen by about half the ping; both the position on the screen and the position moved by that much
+        // must be inside the (reduced) reach
+        double allowed = attackRange() - this.reachSafety.value();
+        double distanceNow = AuraUtil.getStrictDistance(target);
+        net.minecraft.world.phys.Vec3 eye = mc.player.getEyePosition();
+        net.minecraft.client.multiplayer.ClientPacketListener connection = mc.getConnection();
+        net.minecraft.client.multiplayer.PlayerInfo info = connection == null ? null : connection.getPlayerInfo(mc.player.getUUID());
+        double aheadTicks = Math.min(3.0, (info == null ? 0 : info.getLatency()) / 100.0);
+        net.minecraft.world.phys.Vec3 move = target.getDeltaMovement();
+        net.minecraft.world.phys.AABB moved = target.getBoundingBox().move(move.x * aheadTicks, 0.0, move.z * aheadTicks);
+        net.minecraft.world.phys.Vec3 closest = new net.minecraft.world.phys.Vec3(
+                net.minecraft.util.Mth.clamp(eye.x, moved.minX, moved.maxX),
+                net.minecraft.util.Mth.clamp(eye.y, moved.minY, moved.maxY),
+                net.minecraft.util.Mth.clamp(eye.z, moved.minZ, moved.maxZ));
+        double distancePredicted = closest.distanceTo(eye);
+        if (distanceNow >= allowed || distancePredicted >= allowed) {
+            why(String.format(java.util.Locale.ROOT, "запас дальности: сейчас %.2f, с учётом пинга %.2f, можно < %.2f", distanceNow, distancePredicted, allowed));
             return false;
         }
         if (!Attack.anyEntityOnRay(target, attackRange())) {
