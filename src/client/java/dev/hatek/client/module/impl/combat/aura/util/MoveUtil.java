@@ -60,6 +60,10 @@ public final class MoveUtil {
     /** True when the key the player bound to this action is physically held (ignores what the aura wrote to it). */
     public static boolean physicallyDown(net.minecraft.client.KeyMapping mapping) {
         InputConstants.Key bound = ((dev.hatek.mixin.accessor.KeyMappingAccessor) mapping).hatek$boundKey();
+        if (bound.getType() == InputConstants.Type.MOUSE) {
+            return org.lwjgl.glfw.GLFW.glfwGetMouseButton(mc().getWindow().handle(), bound.getValue())
+                    == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+        }
         if (bound.getType() != InputConstants.Type.KEYSYM) {
             return mapping.isDown();
         }
