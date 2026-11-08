@@ -506,37 +506,39 @@ public final class ClassicEsp {
     }
 
     private static void ghosts(LivingEntity target, float partial) {
-        float flight = updateGhostMotion(target, partial, now);
+        updateGhostMotion(target, partial, now);
         float time = (now - ghostEpoch) / 1000.0f;
-        float hurtScale = 1.0f + hurt * 0.18f;
+        float height = target.getBbHeight();
+        Vec3 anchor = position(target, partial);
+        // particle size follows the on-screen height of the target (about a tenth of it), like the original
+        float[] bottom = WorldProjection.toScreen(anchor);
+        float[] top = WorldProjection.toScreen(anchor.add(0.0, height, 0.0));
+        float perspective = bottom != null && top != null
+                ? Mth.clamp(Math.abs(bottom[1] - top[1]) * 0.105f, 7.0f * gs, 25.0f * gs) : 13.0f * gs;
         int[] pal = palette(alpha);
         for (int lane = 0; lane < 3; lane++) {
             float laneOffset = lane * (TAU / 3.0f);
             for (int particle = 29; particle >= 0; particle--) {
                 float trail = particle / 29.0f;
-                long delay = (long) (particle * (18.0f + flight * 16.0f));
-                float delayedTime = (now - delay - ghostEpoch) / 1000.0f;
+                long delay = particle * 24L;
                 Vec3 base = sampleHistory(now - delay);
-                float phase = delayedTime * (0.72f + flight * 0.1f) + laneOffset - trail * 0.32f;
-                float radius = (0.72f + 0.1f * Mth.sin(delayedTime * 1.4f + lane)) * hurtScale * (1.0f - flight * 0.18f);
+                float phase = (now - delay - ghostEpoch) / 1000.0f * 1.35f + laneOffset - trail * 0.42f;
+                float radius = 0.72f * (1.0f - flightStrength * 0.18f);
                 Vec3 world = new Vec3(base.x + Mth.sin(phase) * radius,
-                        base.y + target.getBbHeight() * (0.24f + lane * 0.24f)
-                                + Mth.sin(delayedTime * 1.35f + particle * 0.12f + laneOffset) * (0.13f + flight * 0.05f),
+                        base.y + height * (0.24f + lane * 0.24f) + Mth.sin(phase * 1.2f) * 0.13f,
                         base.z + Mth.cos(phase) * radius);
                 float[] screen = WorldProjection.toScreen(world);
                 if (screen == null) {
                     continue;
                 }
-                float pulse = 0.94f + 0.06f * Mth.sin(time * 4.2f + laneOffset - trail * 2.0f);
-                float size = (0.27f - trail * 0.16f) * pulse * (1.0f + hurt * 0.22f + flight * (1.0f - trail) * 0.16f);
+                float size = perspective * (1.0f - trail * 0.58f);
                 float tailAlpha = 0.08f + 0.92f * (float) Math.pow(1.0f - trail, 1.45);
-                int col = mul(Render2D.lerp(pal[0], pal[1], 0.5f + 0.5f * Mth.sin(phase + trail * 2.0f)), tailAlpha);
-                float half = pixels(world, size);
+                int col = mul(Render2D.lerp(pal[0], pal[1], 0.5f + 0.5f * Mth.sin(phase)), tailAlpha);
                 if (particle == 0) {
-                    glow(screen[0], screen[1], half * 4.2f, mul(col, 0.35f + flight * 0.2f));
+                    glow(screen[0], screen[1], size * 2.9f, mul(col, 0.35f));
                 }
-                glow(screen[0], screen[1], half * 2.7f, mul(col, 0.5f));
-                soft(screen[0], screen[1], half * 2.0f, mul(Render2D.lerp(col, 0xFFFFFFFF, 0.35f), 0.95f));
+                soft(screen[0], screen[1], size * 2.7f, mul(col, 0.18f));
+                soft(screen[0], screen[1], size * 2.0f, mul(col, 0.8f));
             }
         }
     }
