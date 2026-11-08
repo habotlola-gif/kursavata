@@ -122,6 +122,10 @@ public final class ModuleManager {
 
         MODULES.add(new NoJumpDelay());
 
+        MODULES.add(new dev.hatek.client.module.impl.player.AutoTool());
+
+        MODULES.add(new dev.hatek.client.module.impl.player.ItemScroller());
+
         MODULES.add(new VoiceControl());
 
     }

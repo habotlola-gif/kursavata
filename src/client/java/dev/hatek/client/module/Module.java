@@ -81,6 +81,11 @@ public class Module {
         return this.settings;
     }
 
+    /** False for one-shot modules that switch themselves off (their "on" state is not saved in configs). */
+    public boolean persistsEnabled() {
+        return true;
+    }
+
     public boolean isEnabled() {
         return this.enabled;
     }

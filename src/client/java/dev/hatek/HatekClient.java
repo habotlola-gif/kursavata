@@ -72,6 +72,8 @@ public class HatekClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(
+                client -> dev.hatek.client.feature.config.ConfigManager.autosave());
     }
 
     private void onScreenInit(Minecraft mc, net.minecraft.client.gui.screens.Screen screen,
@@ -92,6 +94,7 @@ public class HatekClient implements ClientModInitializer {
             voice.onTick();
         }
 
+        dev.hatek.client.feature.config.ConfigManager.tick();
         ModuleManager.tickAll();
         dev.hatek.client.module.impl.combat.OffhandSwapper.tick();
 

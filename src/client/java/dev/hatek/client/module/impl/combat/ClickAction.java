@@ -41,14 +41,16 @@ public final class ClickAction extends Module {
     @Override
     public void onClientTick() {
         Minecraft mc = Minecraft.getInstance();
-        boolean pearl = this.pearlKey.isDown();
-        boolean wind = this.windKey.isDown();
+        boolean pearl = this.pearlKey.isDown(true);
+        boolean wind = this.windKey.isDown(true);
         boolean pearlPressed = pearl && !this.pearlWas;
         boolean windPressed = wind && !this.windWas;
         this.pearlWas = pearl;
         this.windWas = wind;
         LocalPlayer player = mc.player;
-        if (player == null || mc.gameMode == null || mc.gui.screen() != null) {
+        if (player == null || mc.gameMode == null
+                || (mc.gui.screen() != null
+                && !(mc.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>))) {
             return;
         }
         if (pearlPressed) {

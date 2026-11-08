@@ -107,6 +107,11 @@ public final class VoidTeleport extends Module {
     }
 
     @Override
+    public boolean persistsEnabled() {
+        return false;
+    }
+
+    @Override
     protected void onEnable() {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;

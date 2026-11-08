@@ -52,8 +52,16 @@ public final class KeySetting extends Setting {
 
     /** True while the bound key is held and no screen is open. */
     public boolean isDown() {
+        return isDown(false);
+    }
+
+    /** Same as {@link #isDown()}, optionally also while an inventory / container screen is open. */
+    public boolean isDown(boolean allowContainerScreen) {
         Minecraft mc = Minecraft.getInstance();
-        if (!isSet() || mc.gui.screen() != null) {
+        boolean screenOk = mc.gui.screen() == null
+                || (allowContainerScreen
+                && mc.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>);
+        if (!isSet() || !screenOk) {
             return false;
         }
         if (isMouse()) {

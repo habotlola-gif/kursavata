@@ -87,13 +87,95 @@ public final class ConfigManager {
         if (safe.isEmpty()) {
             return;
         }
+        JsonObject root = buildRoot();
+        try {
+            Files.createDirectories(configs());
+            Files.writeString(configs().resolve(safe + ".json"), GSON.toJson(root),
+                    StandardCharsets.UTF_8);
+            loadedName = safe;
+        } catch (IOException ignored) {
+        }
+        refresh();
+    }
+
+    // ------------------------------------------------------------------------------------------------ last state
+
+    private static JsonObject pendingEnable;
+    private static boolean autoloaded;
+    private static int autosaveTicks;
+
+    private static Path lastFile() {
+        return root().resolve("last.json");
+    }
+
+    /**
+     * Called every client tick: loads the last state once at start (settings and keys at once, the on/off switches as
+     * soon as a world is joined) and saves the current state every half minute.
+     */
+    public static void tick() {
+        Minecraft mc = Minecraft.getInstance();
+        if (!autoloaded) {
+            autoloaded = true;
+            autoload();
+            return;
+        }
+        if (pendingEnable != null) {
+            if (mc.player != null && mc.level != null) {
+                JsonObject modules = pendingEnable;
+                pendingEnable = null;
+                for (Module module : ModuleManager.all()) {
+                    JsonElement raw = modules.get(module.name());
+                    if (raw != null && raw.isJsonObject() && raw.getAsJsonObject().has("enabled")
+                            && module.persistsEnabled()
+                            && raw.getAsJsonObject().get("enabled").getAsBoolean() != module.isEnabled()) {
+                        module.toggle();
+                    }
+                }
+            }
+            return;
+        }
+        if (++autosaveTicks >= 600) {
+            autosaveTicks = 0;
+            autosave();
+        }
+    }
+
+    /** Writes the current state to config/hatek/last.json (also called when the game closes). */
+    public static void autosave() {
+        if (!autoloaded || pendingEnable != null) {
+            return;   // the saved state has not been applied yet, do not overwrite it with defaults
+        }
+        try {
+            Files.createDirectories(root());
+            Files.writeString(lastFile(), GSON.toJson(buildRoot()), StandardCharsets.UTF_8);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static void autoload() {
+        try {
+            if (!Files.isRegularFile(lastFile())) {
+                return;
+            }
+            JsonObject root = JsonParser.parseString(Files.readString(lastFile(), StandardCharsets.UTF_8)).getAsJsonObject();
+            JsonObject modules = root.getAsJsonObject("modules");
+            if (modules == null) {
+                return;
+            }
+            applyModules(modules, false);
+            pendingEnable = modules;
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static JsonObject buildRoot() {
         JsonObject root = new JsonObject();
         root.addProperty("author", playerName());
         root.addProperty("version", 1);
         JsonObject modules = new JsonObject();
         for (Module module : ModuleManager.all()) {
             JsonObject entry = new JsonObject();
-            entry.addProperty("enabled", module.isEnabled());
+            entry.addProperty("enabled", module.persistsEnabled() && module.isEnabled());
             entry.addProperty("expanded", module.isExpanded());
             entry.addProperty("key", module.keyCode());
             JsonObject settings = new JsonObject();
@@ -107,15 +189,7 @@ public final class ConfigManager {
             modules.add(module.name(), entry);
         }
         root.add("modules", modules);
-
-        try {
-            Files.createDirectories(configs());
-            Files.writeString(configs().resolve(safe + ".json"), GSON.toJson(root),
-                    StandardCharsets.UTF_8);
-            loadedName = safe;
-        } catch (IOException ignored) {
-        }
-        refresh();
+        return root;
     }
 
     public static void load(ConfigEntry entry) {
@@ -126,34 +200,39 @@ public final class ConfigManager {
             if (modules == null) {
                 return;
             }
-            for (Module module : ModuleManager.all()) {
-                JsonElement raw = modules.get(module.name());
-                if (raw == null || !raw.isJsonObject()) {
-                    continue;
-                }
-                JsonObject node = raw.getAsJsonObject();
-                if (node.has("enabled") && node.get("enabled").getAsBoolean() != module.isEnabled()) {
-                    module.toggle();
-                }
-                if (node.has("expanded")) {
-                    module.expanded(node.get("expanded").getAsBoolean());
-                }
-                if (node.has("key")) {
-                    module.keybind(node.get("key").getAsInt());
-                }
-                JsonObject settings = node.getAsJsonObject("settings");
-                if (settings == null) {
-                    continue;
-                }
-                for (Setting setting : module.settings()) {
-                    JsonElement value = settings.get(setting.name());
-                    if (value != null && value.isJsonPrimitive()) {
-                        setting.deserialize(value.getAsString());
-                    }
-                }
-            }
+            applyModules(modules, true);
             loadedName = entry.name();
         } catch (Exception ignored) {
+        }
+    }
+
+    private static void applyModules(JsonObject modules, boolean withEnabled) {
+        for (Module module : ModuleManager.all()) {
+            JsonElement raw = modules.get(module.name());
+            if (raw == null || !raw.isJsonObject()) {
+                continue;
+            }
+            JsonObject node = raw.getAsJsonObject();
+            if (withEnabled && module.persistsEnabled() && node.has("enabled")
+                    && node.get("enabled").getAsBoolean() != module.isEnabled()) {
+                module.toggle();
+            }
+            if (node.has("expanded")) {
+                module.expanded(node.get("expanded").getAsBoolean());
+            }
+            if (node.has("key")) {
+                module.keybind(node.get("key").getAsInt());
+            }
+            JsonObject settings = node.getAsJsonObject("settings");
+            if (settings == null) {
+                continue;
+            }
+            for (Setting setting : module.settings()) {
+                JsonElement value = settings.get(setting.name());
+                if (value != null && value.isJsonPrimitive()) {
+                    setting.deserialize(value.getAsString());
+                }
+            }
         }
     }
 

@@ -4,7 +4,7 @@
   "package": "dev.hatek.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
-    "CameraMixin",
+    "AbstractContainerScreenMixin",    "CameraMixin",
     "ChatScreenMixin",
     "ClientClockManagerMixin",
     "ClientPacketListenerMixin",

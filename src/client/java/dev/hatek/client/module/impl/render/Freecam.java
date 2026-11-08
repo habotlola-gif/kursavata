@@ -58,6 +58,11 @@ public final class Freecam extends Module {
     }
 
     @Override
+    public boolean persistsEnabled() {
+        return false;
+    }
+
+    @Override
     protected void onEnable() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
