@@ -102,6 +102,8 @@ public final class AttackAura extends Module {
     private final ModeSetting critMode = new ModeSetting("New: crits", 1, "Off (hit at once)", "Smart (wait for the fall in the air)");
     private final ModeSetting priority = new ModeSetting("Target priority", 0, "Distance", "Health", "Armor", "Crosshair");
     private final SliderSetting targetFov = new SliderSetting("Target FOV (degrees)", 120.0, 30.0, 360.0, 5.0);
+    private final SliderSetting critChance = new SliderSetting("New: crit chance (%)", 75.0, 0.0, 100.0, 5.0);
+    private boolean critWanted = true;
     private int airWaitTicks;
     private int groundWaitTicks;
     private int lastStrikeTick = -10;
@@ -130,10 +132,11 @@ public final class AttackAura extends Module {
         keybind(GLFW.GLFW_KEY_R);
         with(this.attackRange, this.preRange, this.movementType, this.rotationMode, this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.targets, this.misc,
-                this.extras, this.holdMargin, this.attackCore, this.minCharge, this.critMode, this.priority, this.targetFov, this.debug, this.chargeSpread);
+                this.extras, this.holdMargin, this.attackCore, this.minCharge, this.critMode, this.critChance, this.priority, this.targetFov, this.debug, this.chargeSpread);
 
         this.minCharge.visibleIf(AttackAura::newCore);
         this.critMode.visibleIf(AttackAura::newCore);
+        this.critChance.visibleIf(AttackAura::newCore);
         this.neuralChaos.visibleIf(AttackAura::neuralRotation);
         this.neuralAssist.visibleIf(AttackAura::neuralRotation);
         // the Smooth Rotation settings exist only while that rotation is selected
@@ -519,6 +522,8 @@ public final class AttackAura extends Module {
                 this.lastStrikeTick = mc.player.tickCount;
                 this.airWaitTicks = 0;
                 this.groundWaitTicks = 0;
+                // a real player does not crit every time: the next hit is a crit only with the given chance
+                this.critWanted = java.util.concurrent.ThreadLocalRandom.current().nextDouble() * 100.0 < this.critChance.value();
             }
         } else {
             Attack.useEntity(target, preHit, postHit, InteractionHand.MAIN_HAND, true);
@@ -543,7 +548,7 @@ public final class AttackAura extends Module {
             why(String.format(java.util.Locale.ROOT, "оружие заряжено на %.0f%% из %.0f%%", charge * 100.0F, need * 100.0F));
             return false;
         }
-        if (this.critMode.value().startsWith("Smart")) {
+        if (this.critMode.value().startsWith("Smart") && this.critWanted) {
             boolean inAir = !mc.player.onGround() && !mc.player.onClimbable() && !mc.player.isInWater()
                     && !mc.player.isInLava() && !mc.player.isPassenger() && !mc.player.getAbilities().flying;
             // a crit needs a real fall (the server counts fallDistance > 0) and no sprinting; the sprint is dropped
@@ -554,6 +559,9 @@ public final class AttackAura extends Module {
                 if (!falling && this.airWaitTicks < 12) {
                     // rising or at the top of the jump: the crit window opens with the fall
                     this.airWaitTicks++;
+                    // sprint is dropped quietly while waiting: the server learns it from the normal movement
+                    // packet, and no extra start / stop packets are needed at the hit
+                    holdSprint();
                     why("ждёт падения для крита (макс. 12 тиков)");
                     return false;
                 }
@@ -564,6 +572,7 @@ public final class AttackAura extends Module {
                 boolean aboutToJump = mc.options.keyJump.isDown() || Attack.ticksSinceAir() <= 2;
                 if (aboutToJump && this.groundWaitTicks < 6) {
                     this.groundWaitTicks++;
+                    holdSprint();
                     why("стоит на земле, но сейчас прыгнет: ждёт крит (макс. 6 тиков)");
                     return false;
                 }
