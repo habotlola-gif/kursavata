@@ -46,6 +46,9 @@ public final class Particles extends Module {
     private final BoolSetting aroundMe = new BoolSetting("Вокруг меня", true);
     private final BoolSetting aroundTarget = new BoolSetting("Вокруг цели", true);
     private final BoolSetting onHit = new BoolSetting("При ударе", true);
+    private final BoolSetting totemPop = new BoolSetting("Тотем поп (когда сносишь тотем)", true);
+    private final BoolSetting totemOwn = new BoolSetting("Тотем поп и у меня", false);
+    private final SliderSetting totemAmount = new SliderSetting("Тотем поп: звёзд", 34.0, 10.0, 80.0, 2.0);
     private final ColorSetting color = new ColorSetting("Цвет", 0xFFFF8AD8);
     private final BoolSetting rainbow = new BoolSetting("Радужные", false);
     private final BoolSetting fill = new BoolSetting("Заливка", false);
@@ -61,6 +64,7 @@ public final class Particles extends Module {
     private static final class Star {
         double x, y, z, vx, vy, vz;
         float age, life, size, rot, spin, hue;
+        int tint;          // 0 = the colour from the settings, otherwise a fixed colour (totem pop)
     }
 
     private final List<Star> stars = new ArrayList<>();
@@ -72,7 +76,9 @@ public final class Particles extends Module {
         super("Particles", "Star sparkles around you, the target and on every hit", Category.RENDER);
         instance = this;
         this.thickness.visibleIf(() -> !this.fill.value());
-        with(this.shape, this.aroundMe, this.aroundTarget, this.onHit, this.color, this.rainbow, this.fill, this.size,
+        this.totemOwn.visibleIf(this.totemPop::value);
+        this.totemAmount.visibleIf(this.totemPop::value);
+        with(this.shape, this.aroundMe, this.aroundTarget, this.onHit, this.totemPop, this.totemOwn, this.totemAmount, this.color, this.rainbow, this.fill, this.size,
                 this.amount, this.lifetime, this.speed, this.rise, this.spin, this.thickness, this.glow);
     }
 
@@ -94,6 +100,34 @@ public final class Particles extends Module {
         Vec3 c = target.position().add(0.0, target.getBbHeight() * 0.6, 0.0);
         for (int i = 0; i < 14; i++) {
             self.spawn(c.x, c.y, c.z, true);
+        }
+    }
+
+    private static final int[] TOTEM_COLORS = {0xFFFFD84A, 0xFFFFF08A, 0xFF6BE04A, 0xFF9DF58E, 0xFFFFFFFF};
+
+    /** A totem of undying went off on this entity: a big golden-green burst around its body. */
+    public static void onTotemPop(net.minecraft.world.entity.Entity entity) {
+        Particles self = instance;
+        Minecraft mc = Minecraft.getInstance();
+        if (self == null || !self.isEnabled() || !self.totemPop.value() || entity == null || mc.player == null) {
+            return;
+        }
+        if (entity == mc.player && !self.totemOwn.value()) {
+            return;
+        }
+        Vec3 c = entity.position().add(0.0, entity.getBbHeight() * 0.55, 0.0);
+        int count = (int) Math.round(self.totemAmount.value());
+        for (int i = 0; i < count; i++) {
+            self.spawn(c.x, c.y, c.z, true);
+            Star a = self.stars.isEmpty() ? null : self.stars.get(self.stars.size() - 1);
+            if (a != null) {
+                a.tint = TOTEM_COLORS[RANDOM.nextInt(TOTEM_COLORS.length)];
+                a.vx *= 1.5;
+                a.vz *= 1.5;
+                a.vy = 0.5 + RANDOM.nextDouble() * 1.6;
+                a.life *= 1.4f;
+                a.size *= 1.25f;
+            }
         }
     }
 
@@ -212,7 +246,7 @@ public final class Particles extends Module {
                 float fadeIn = Mth.clamp(a.age / 0.2f, 0.0f, 1.0f);
                 float fadeOut = Mth.clamp((a.life - a.age) / 0.5f, 0.0f, 1.0f);
                 float alpha = fadeIn * fadeOut;
-                int rgb = this.rainbow.value()
+                int rgb = a.tint != 0 ? a.tint : this.rainbow.value()
                         ? java.awt.Color.HSBtoRGB((a.hue + a.age * 0.15f) % 1.0f, 0.65f, 0.97f) | 0xFF000000
                         : this.color.value();
                 drawStar(gg, scr[0], scr[1], r * (0.75f + 0.25f * fadeOut), a.rot, rgb, alpha, glowAmount);
