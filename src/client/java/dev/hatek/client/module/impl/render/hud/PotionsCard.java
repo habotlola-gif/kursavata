@@ -96,12 +96,13 @@ public final class PotionsCard extends HudCard<PotionsCard.Effect> {
     protected void drawRow(GuiGraphicsExtractor gg, float x, float baseline, float s, Effect r) {
         HFont nameFont = row(s);
         HFont levelFont = Fonts.of(Fonts.INTER_MEDIUM, Math.max(8, Math.round(15.0f * s)));
-        float timeWidth = nameFont.width(r.time());
-        float maxName = 230.0f * s - 28.0f * s - timeWidth - 12.0f * s;
+        // the levels stand in one column (right-aligned), the time keeps the right edge
+        float levelRight = x + 160.0f * s;
+        float maxName = (160.0f - 14.0f - 22.0f) * s;
         String name = nameFont.trim(r.name(), maxName);
-        float nameWidth = nameFont.draw(gg, name, x + 14.0f * s, baseline, 0xFFFFFFFF);
+        nameFont.draw(gg, name, x + 14.0f * s, baseline, 0xFFFFFFFF);
         if (!r.level().isEmpty()) {
-            levelFont.draw(gg, r.level(), x + 14.0f * s + nameWidth + 5.0f * s, baseline, LEVEL);
+            levelFont.drawRight(gg, r.level(), levelRight, baseline, LEVEL);
         }
         nameFont.drawRight(gg, r.time(), x + 216.0f * s, baseline, ACCENT);
     }
