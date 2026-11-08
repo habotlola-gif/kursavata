@@ -56,7 +56,13 @@ public final class ClassicEsp {
     public static final Params P = new Params();
 
     private static final float TAU = (float) (Math.PI * 2.0);
-    private static final Identifier STAR = Identifier.fromNamespaceAndPath("hatek_client", "textures/gui/star_sharp_filled.png");
+    private static Identifier tex(String name) {
+        return Identifier.fromNamespaceAndPath("hatek_client", "textures/gui/" + name + ".png");
+    }
+
+    private static final Identifier STAR = tex("tesp_star");
+    private static final Identifier GLOW = tex("tesp_glow");
+    private static final Identifier[] MARKERS = {tex("tesp_marker0"), tex("tesp_marker1"), tex("tesp_marker2"), tex("tesp_marker3")};
     private static final float[][] MARKER_PARAMS = {
             {110.0f, 2.8f, 0.5f, 1.6f, 0.06f, 3.0f}, {220.0f, 2.2f, 0.0f, 2.4f, 0.07f, 4.0f},
             {-180.0f, 2.6f, 1.0f, 1.8f, 0.12f, 0.0f}, {140.0f, 3.0f, 2.0f, 1.2f, 0.1f, 6.0f}};
@@ -259,13 +265,19 @@ public final class ClassicEsp {
         Render2D.circle(gg, x - d / 2.0f, y - d / 2.0f, d, argb);
     }
 
-    private static void sprite(Identifier tex, float cx, float cy, float size, float rotation, int argb) {
+    private static void sprite(Identifier tex, int texSize, float cx, float cy, float size, float rotation, int argb) {
         int s = Math.max(3, Math.round(size));
         gg.pose().pushMatrix();
         gg.pose().translate(cx, cy);
         gg.pose().rotate(rotation);
-        gg.blit(RenderPipelines.GUI_TEXTURED, tex, -s / 2, -s / 2, 0.0f, 0.0f, s, s, 256, 256, 256, 256, Render2D.tint(argb));
+        gg.blit(RenderPipelines.GUI_TEXTURED, tex, -s / 2, -s / 2, 0.0f, 0.0f, s, s, texSize, texSize, texSize, texSize,
+                Render2D.tint(argb));
         gg.pose().popMatrix();
+    }
+
+    /** The soft glowing dot (dashbloom): a bright core fading out smoothly. */
+    private static void soft(float x, float y, float diameter, int argb) {
+        sprite(GLOW, 256, x, y, Math.max(3.0f, diameter), 0.0f, argb);
     }
 
     private static Vec3 lerp(Vec3 from, Vec3 to, double t) {
@@ -291,70 +303,9 @@ public final class ClassicEsp {
         int[] pal = palette(alpha * (0.85f + 0.15f * pulse));
         float rad = (float) Math.toRadians(angle);
 
-        glow(screen[0], screen[1], half * 1.9f, mul(pal[0], 0.35f));
-        float thick = Math.max(1.5f, half * 0.1f);
-        float c = Mth.cos(rad);
-        float s = Mth.sin(rad);
-        switch (skin) {
-            case 0 -> {
-                float arm = half * 0.45f;
-                float corner = half * 0.9f;
-                for (int i = 0; i < 4; i++) {
-                    float sx = (i == 0 || i == 3) ? -1.0f : 1.0f;
-                    float sy = i < 2 ? -1.0f : 1.0f;
-                    int col = (i % 2 == 0) ? pal[0] : pal[1];
-                    float[] a = rotate(sx * corner, sy * corner, c, s, screen);
-                    float[] bx = rotate(sx * (corner - arm), sy * corner, c, s, screen);
-                    float[] by = rotate(sx * corner, sy * (corner - arm), c, s, screen);
-                    Draw.line(gg, a[0], a[1], bx[0], bx[1], thick, col);
-                    Draw.line(gg, a[0], a[1], by[0], by[1], thick, col);
-                }
-                dot(screen[0], screen[1], half * 0.18f, pal[1]);
-            }
-            case 1 -> {
-                int segments = 28;
-                float radius = half * 0.8f;
-                for (int i = 0; i < segments; i++) {
-                    float a0 = i * TAU / segments;
-                    float a1 = (i + 1) * TAU / segments;
-                    float[] q0 = rotate(Mth.cos(a0) * radius, Mth.sin(a0) * radius, c, s, screen);
-                    float[] q1 = rotate(Mth.cos(a1) * radius, Mth.sin(a1) * radius, c, s, screen);
-                    Draw.line(gg, q0[0], q0[1], q1[0], q1[1], thick, i % 2 == 0 ? pal[0] : pal[1]);
-                }
-                for (int i = 0; i < 4; i++) {
-                    float a = i * Mth.HALF_PI;
-                    float[] in = rotate(Mth.cos(a) * half * 0.45f, Mth.sin(a) * half * 0.45f, c, s, screen);
-                    float[] out = rotate(Mth.cos(a) * half * 1.0f, Mth.sin(a) * half * 1.0f, c, s, screen);
-                    Draw.line(gg, in[0], in[1], out[0], out[1], thick, pal[1]);
-                }
-                dot(screen[0], screen[1], half * 0.16f, pal[0]);
-            }
-            case 2 -> {
-                for (int ring = 0; ring < 2; ring++) {
-                    float h = half * (ring == 0 ? 0.95f : 0.5f);
-                    float[][] pts = {{0, -h}, {h, 0}, {0, h}, {-h, 0}};
-                    for (int i = 0; i < 4; i++) {
-                        float[] a = rotate(pts[i][0], pts[i][1], c, s, screen);
-                        float[] b = rotate(pts[(i + 1) % 4][0], pts[(i + 1) % 4][1], c, s, screen);
-                        Draw.line(gg, a[0], a[1], b[0], b[1], thick, ring == 0 ? pal[0] : pal[1]);
-                    }
-                }
-            }
-            default -> {
-                float radius = half * 0.9f;
-                float[][] pts = new float[3][];
-                for (int i = 0; i < 3; i++) {
-                    float a = -Mth.HALF_PI + i * TAU / 3.0f;
-                    pts[i] = rotate(Mth.cos(a) * radius, Mth.sin(a) * radius, c, s, screen);
-                }
-                for (int i = 0; i < 3; i++) {
-                    float[] a = pts[i];
-                    float[] b = pts[(i + 1) % 3];
-                    Draw.line(gg, a[0], a[1], b[0], b[1], thick, i % 2 == 0 ? pal[0] : pal[1]);
-                    dot(a[0], a[1], half * 0.2f, pal[1]);
-                }
-            }
-        }
+        glow(screen[0], screen[1], half * 1.9f, mul(pal[0], 0.30f));
+        // the real marker texture: its half size in the world is `size` blocks (the quad spans -size..size)
+        sprite(MARKERS[skin], 384, screen[0], screen[1], half * 2.0f / 0.8f, rad, Render2D.lerp(pal[0], pal[1], 0.5f));
     }
 
     private static float[] rotate(float x, float y, float c, float s, float[] origin) {
@@ -585,7 +536,7 @@ public final class ClassicEsp {
                     glow(screen[0], screen[1], half * 4.2f, mul(col, 0.35f + flight * 0.2f));
                 }
                 glow(screen[0], screen[1], half * 2.7f, mul(col, 0.5f));
-                glow(screen[0], screen[1], half * 1.5f, mul(Render2D.lerp(col, 0xFFFFFFFF, 0.35f), 0.95f));
+                soft(screen[0], screen[1], half * 2.0f, mul(Render2D.lerp(col, 0xFFFFFFFF, 0.35f), 0.95f));
             }
         }
     }
@@ -637,7 +588,7 @@ public final class ClassicEsp {
             float pulse = 0.75f + 0.25f * Mth.sin(time * 3.0f + frac * TAU * 1.7f);
             float size = pixels(points[s], P.conPointSize * pulse * 1.4f * (1.0f + hurt * 0.2f)) * 1.6f;
             glow(screen[s][0], screen[s][1], size * 2.6f, mul(col, 0.35f * P.conGlow + 0.1f));
-            sprite(STAR, screen[s][0], screen[s][1], size * 2.0f, (time * 40.0f + s * 12.0f) * Mth.DEG_TO_RAD, col);
+            sprite(STAR, 256, screen[s][0], screen[s][1], size * 2.0f, (time * 40.0f + s * 12.0f) * Mth.DEG_TO_RAD, col);
         }
     }
 
@@ -678,7 +629,7 @@ public final class ClassicEsp {
             }
             float px = Mth.clamp(pixels(world, P.bloomSize * seed.sizeFactor * pulse * (1.0f + hurt * 0.2f)), 4.0f, 60.0f);
             glow(screen[0], screen[1], px * 2.6f, mul(particleColor, alphaFactor * 0.43f));
-            dot(screen[0], screen[1], px, mul(particleColor, alphaFactor * 0.86f));
+            soft(screen[0], screen[1], px * 1.6f, mul(particleColor, alphaFactor * 0.95f));
         }
     }
 
@@ -709,7 +660,7 @@ public final class ClassicEsp {
                 float tailFade = Math.min(1.0f, 1.35f - j / 13.5f);
                 int col = mul(theme, tailFade);
                 glow(screen[0], screen[1], px * 2.6f, mul(col, 0.55f));
-                dot(screen[0], screen[1], px, col);
+                soft(screen[0], screen[1], px * 1.6f, col);
             }
         }
     }
