@@ -25,6 +25,7 @@ public final class ClientEvents {
             airStuck.beforeTick(mc.player);
         }
         dev.hatek.client.module.impl.combat.OffhandSwapper.beforePlayerTick(mc.player);
+        dev.hatek.client.module.impl.combat.ClickAction.beforePlayerTick(mc.player);
         dev.hatek.client.module.impl.movement.DragonFly dragonFly = dev.hatek.client.module.impl.movement.DragonFly.instance();
         if (dragonFly != null) {
             dragonFly.beforeTick(mc.player);
@@ -58,6 +59,7 @@ public final class ClientEvents {
             airStuck.afterTick(mc.player);
         }
         dev.hatek.client.module.impl.combat.OffhandSwapper.afterPlayerTick();
+        dev.hatek.client.module.impl.combat.ClickAction.afterPlayerTick();
     }
 
     public static void render3D() {

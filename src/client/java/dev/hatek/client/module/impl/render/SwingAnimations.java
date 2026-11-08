@@ -14,7 +14,9 @@ import org.joml.Quaternionfc;
 public final class SwingAnimations extends Module {
     private static SwingAnimations instance;
 
-    private final ModeSetting mode = new ModeSetting("Animation", 4, "Vanilla", "Smooth", "Block 1.7", "Spin", "Chop", "Stab");
+    private final ModeSetting mode = new ModeSetting("Animation", 4, "Vanilla", "Smooth", "Block 1.7", "Spin", "Chop", "Stab", "Slam", "Swipe",
+            "Whip", "Flip", "Roll", "Wave", "Pendulum", "Punch", "Drop", "Shake", "Cross", "Corkscrew", "Hammer",
+            "Fan");
     private final SliderSetting speed = new SliderSetting("Swing speed (%)", 100.0, 50.0, 200.0, 5.0);
     private final BoolSetting noEquip = new BoolSetting("No equip dip", false);
 
@@ -85,8 +87,90 @@ public final class SwingAnimations extends Module {
                 pose.translate(side * -0.05f * arc, 0.02f * arc, -0.45f * arc);
                 pose.mulPose((Quaternionfc) Axis.XP.rotationDegrees(-10.0f * arc));
             }
+            case "Slam" -> {
+                // wind up above the head, then hit down hard
+                float wind = smooth(0.0f, 0.3f, progress) * (1.0f - smooth(0.3f, 0.5f, progress));
+                float hit = smooth(0.3f, 0.5f, progress) * (1.0f - smooth(0.55f, 1.0f, progress));
+                pose.translate(side * -0.04f * hit, 0.12f * wind - 0.05f * hit, -0.22f * hit);
+                pose.mulPose((Quaternionfc) Axis.XP.rotationDegrees(70.0f * wind - 95.0f * hit));
+            }
+            case "Swipe" -> {
+                // a diagonal slash from the upper outside to the lower inside
+                float sweep = eased * 2.0f - 1.0f;
+                pose.translate(side * (0.18f * -sweep) * arc, 0.12f * -sweep * arc, -0.15f * arc);
+                pose.mulPose((Quaternionfc) Axis.ZP.rotationDegrees(side * (-50.0f * sweep) * arc));
+                pose.mulPose((Quaternionfc) Axis.XP.rotationDegrees(-35.0f * arc));
+                pose.mulPose((Quaternionfc) Axis.YP.rotationDegrees(side * 25.0f * sweep * arc));
+            }
+            case "Whip" -> {
+                pose.translate(side * -0.3f * snap, 0.03f * arc, -0.1f * arc);
+                pose.mulPose((Quaternionfc) Axis.YP.rotationDegrees(side * -75.0f * snap));
+                pose.mulPose((Quaternionfc) Axis.ZP.rotationDegrees(side * 22.0f * arc));
+            }
+            case "Flip" -> {
+                pose.translate(0.0f, 0.1f * arc, -0.2f * arc);
+                pose.mulPose((Quaternionfc) Axis.XP.rotationDegrees(-360.0f * eased));
+            }
+            case "Roll" -> {
+                pose.translate(side * -0.06f * arc, 0.04f * arc, -0.1f * arc);
+                pose.mulPose((Quaternionfc) Axis.ZP.rotationDegrees(side * 360.0f * eased));
+            }
+            case "Wave" -> {
+                float wave = Mth.sin(progress * (float) Math.PI * 4.0f);
+                pose.translate(side * -0.08f * wave * arc, 0.04f * arc, -0.1f * arc);
+                pose.mulPose((Quaternionfc) Axis.ZP.rotationDegrees(side * 28.0f * wave * arc));
+                pose.mulPose((Quaternionfc) Axis.XP.rotationDegrees(-30.0f * arc));
+            }
+            case "Pendulum" -> {
+                float swing = Mth.sin(progress * (float) Math.PI * 2.0f);
+                pose.translate(side * 0.2f * swing * arc, -0.05f * arc, -0.12f * arc);
+                pose.mulPose((Quaternionfc) Axis.YP.rotationDegrees(side * -45.0f * swing * arc));
+                pose.mulPose((Quaternionfc) Axis.ZP.rotationDegrees(side * 18.0f * swing * arc));
+            }
+            case "Punch" -> {
+                pose.translate(side * -0.02f * snap, 0.04f * snap, -0.6f * snap);
+                pose.mulPose((Quaternionfc) Axis.XP.rotationDegrees(-6.0f * snap));
+            }
+            case "Drop" -> {
+                pose.translate(0.0f, -0.4f * arc, 0.05f * arc);
+                pose.mulPose((Quaternionfc) Axis.XP.rotationDegrees(28.0f * arc));
+            }
+            case "Shake" -> {
+                float shake = Mth.sin(progress * (float) Math.PI * 12.0f);
+                pose.translate(side * 0.03f * shake * arc, 0.02f * shake * arc, -0.12f * arc);
+                pose.mulPose((Quaternionfc) Axis.ZP.rotationDegrees(side * 10.0f * shake * arc));
+                pose.mulPose((Quaternionfc) Axis.XP.rotationDegrees(-20.0f * arc));
+            }
+            case "Cross" -> {
+                pose.translate(side * 0.5f * snap, 0.05f * arc, -0.15f * arc);
+                pose.mulPose((Quaternionfc) Axis.YP.rotationDegrees(side * 60.0f * snap));
+                pose.mulPose((Quaternionfc) Axis.ZP.rotationDegrees(side * -18.0f * snap));
+            }
+            case "Corkscrew" -> {
+                pose.translate(side * -0.04f * arc, 0.02f * arc, -0.42f * arc);
+                pose.mulPose((Quaternionfc) Axis.ZP.rotationDegrees(side * 540.0f * eased));
+            }
+            case "Hammer" -> {
+                // lifts the hand straight up and drops it onto the target
+                float lift = smooth(0.0f, 0.4f, progress) * (1.0f - smooth(0.4f, 0.55f, progress));
+                float fall = smooth(0.4f, 0.55f, progress) * (1.0f - smooth(0.6f, 1.0f, progress));
+                pose.translate(0.0f, 0.3f * lift - 0.12f * fall, -0.1f * lift - 0.28f * fall);
+                pose.mulPose((Quaternionfc) Axis.XP.rotationDegrees(40.0f * lift - 80.0f * fall));
+            }
+            case "Fan" -> {
+                // the hand opens like a fan: a wide arc left to right and back
+                float arcAngle = Mth.sin(progress * (float) Math.PI * 2.0f);
+                pose.translate(side * -0.1f * arcAngle * arc, 0.06f * arc, -0.2f * arc);
+                pose.mulPose((Quaternionfc) Axis.YP.rotationDegrees(side * 55.0f * arcAngle * arc));
+                pose.mulPose((Quaternionfc) Axis.XP.rotationDegrees(-40.0f * arc));
+            }
             default -> {
             }
         }
+    }
+
+    private static float smooth(float from, float to, float value) {
+        float t = Mth.clamp((value - from) / (to - from), 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
     }
 }

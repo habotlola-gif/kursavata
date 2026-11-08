@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class KeyboardInputMixin extends ClientInput {
     @Inject(method = "tick", at = @At("TAIL"))
     private void hatek$pause(CallbackInfo ci) {
-        if (OffhandSwapper.pauseMovement() || dev.hatek.client.module.impl.combat.SuperSpear.isActive()
+        if (OffhandSwapper.pauseMovement() || dev.hatek.client.module.impl.combat.ClickAction.pauseMovement() || dev.hatek.client.module.impl.combat.SuperSpear.isActive()
                 || dev.hatek.client.module.impl.render.Freecam.active()) {
             this.keyPresses = new Input(false, false, false, false, false, false, false);
             this.moveVector = Vec2.ZERO;

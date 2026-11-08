@@ -90,6 +90,8 @@ public final class ModuleManager {
 
         MODULES.add(new ClickAction());
 
+        MODULES.add(new dev.hatek.client.module.impl.combat.FTHelper());
+
         MODULES.add(new AirStuck());
 
         MODULES.add(new VoidTeleport());

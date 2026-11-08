@@ -1,6 +1,7 @@
 package dev.hatek.client.module.impl.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.impl.render.hud.DragHandle;
@@ -28,6 +29,8 @@ import java.util.Locale;
 public final class ViewModel extends Module {
     private static final float HAND_DEPTH = 0.72f;
     private static final double WHEEL_STEP = 0.05;
+    private static final double ROLL_STEP = 6.0;
+    private static final double DEGREES_PER_PIXEL = 0.35;
 
     private static ViewModel instance;
 
@@ -68,6 +71,11 @@ public final class ViewModel extends Module {
         }
         HandSetting hand = hand(arm);
         pose.translate(hand.x(), hand.y(), hand.z());
+        if (hand.hasRotation()) {
+            pose.mulPose((org.joml.Quaternionfc) Axis.XP.rotationDegrees(hand.rotX()));
+            pose.mulPose((org.joml.Quaternionfc) Axis.YP.rotationDegrees(hand.rotY()));
+            pose.mulPose((org.joml.Quaternionfc) Axis.ZP.rotationDegrees(hand.rotZ()));
+        }
     }
 
     private boolean editorActive() {
@@ -88,6 +96,12 @@ public final class ViewModel extends Module {
         return guiX < chatWidth && guiY > chatBottom - chatHeight && guiY < chatBottom + 26.0;
     }
 
+    private static boolean ctrlDown() {
+        long window = Minecraft.getInstance().getWindow().handle();
+        return GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS;
+    }
+
     /** Mouse wheel in the chat screen. Returns true when it moved a hand (the chat then does not scroll). */
     public boolean onScroll(double guiX, double guiY, double scrollY) {
         if (!editorActive() || scrollY == 0.0) {
@@ -97,7 +111,12 @@ public final class ViewModel extends Module {
         if (overChatMessages(guiX, guiY, screen)) {
             return false;
         }
-        hand(armAt(guiX, screen)).moveZ(Math.signum(scrollY) * WHEEL_STEP);
+        HandSetting hand = hand(armAt(guiX, screen));
+        if (ctrlDown()) {
+            hand.roll(Math.signum(scrollY) * ROLL_STEP);
+        } else {
+            hand.moveZ(Math.signum(scrollY) * WHEEL_STEP);
+        }
         return true;
     }
 
@@ -131,10 +150,15 @@ public final class ViewModel extends Module {
         }
         if (this.draggedArm != null) {
             HandSetting hand = hand(this.draggedArm);
-            double fov = Math.toRadians(mc.options.fov().get());
-            double depth = Math.max(0.2, HAND_DEPTH - hand.z());
-            double unitsPerPixel = 2.0 * Math.tan(fov / 2.0) * depth / Render2D.screenHeight();
-            hand.move((mx - this.lastX) * unitsPerPixel, -(my - this.lastY) * unitsPerPixel);
+            if (ctrlDown()) {
+                // Ctrl + drag turns the hand instead of moving it
+                hand.rotate((mx - this.lastX) * DEGREES_PER_PIXEL, (my - this.lastY) * DEGREES_PER_PIXEL);
+            } else {
+                double fov = Math.toRadians(mc.options.fov().get());
+                double depth = Math.max(0.2, HAND_DEPTH - hand.z());
+                double unitsPerPixel = 2.0 * Math.tan(fov / 2.0) * depth / Render2D.screenHeight();
+                hand.move((mx - this.lastX) * unitsPerPixel, -(my - this.lastY) * unitsPerPixel);
+            }
             this.lastX = mx;
             this.lastY = my;
         }
@@ -151,10 +175,11 @@ public final class ViewModel extends Module {
         String text;
         if (this.draggedArm != null) {
             HandSetting hand = hand(this.draggedArm);
-            text = String.format(Locale.ROOT, "%s hand   X %.2f   Y %.2f   Z %.2f",
-                    this.draggedArm == HumanoidArm.RIGHT ? "Right" : "Left", hand.x(), hand.y(), hand.z());
+            text = String.format(Locale.ROOT, "%s hand   X %.2f  Y %.2f  Z %.2f   |   rot %.0f / %.0f / %.0f",
+                    this.draggedArm == HumanoidArm.RIGHT ? "Right" : "Left", hand.x(), hand.y(), hand.z(),
+                    hand.rotX(), hand.rotY(), hand.rotZ());
         } else {
-            text = "LMB drag: move hand   |   wheel: closer / farther   |   RMB: reset";
+            text = "LMB drag: move   |   Ctrl + LMB drag: rotate   |   wheel: closer / farther   |   Ctrl + wheel: roll   |   RMB: reset";
         }
         float s = Render2D.screenHeight() / 1080.0f;
         HFont font = Fonts.of(Fonts.INTER_MEDIUM, Math.max(9, Math.round(14.0f * s)));
