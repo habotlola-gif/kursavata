@@ -660,6 +660,12 @@ public final class Attack {
         }
     }
 
+    /** Ticks since the player last stood on the ground... reversed: ticks since the last tick in the air. */
+    public static int ticksSinceAir() {
+        Minecraft mc = mc();
+        return mc.player == null ? 999 : mc.player.tickCount - lastAirTick;
+    }
+
     private static boolean fallComing() {
         Minecraft mc = mc();
         if (mc.player == null || mc.options == null) {

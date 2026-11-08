@@ -103,6 +103,7 @@ public final class AttackAura extends Module {
     private final ModeSetting priority = new ModeSetting("Target priority", 0, "Distance", "Health", "Armor", "Crosshair");
     private final SliderSetting targetFov = new SliderSetting("Target FOV (degrees)", 120.0, 30.0, 360.0, 5.0);
     private int airWaitTicks;
+    private int groundWaitTicks;
     private int lastStrikeTick = -10;
     private final BoolSetting debug = new BoolSetting("Debug: писать в чат, почему не бьёт", false);
     private long lastDebugAt;
@@ -452,8 +453,10 @@ public final class AttackAura extends Module {
         float[] base = getRanges();
         float[] ranges = new float[]{base[0], base[1], base[0] + base[1]};
 
-        boolean canPacket = packetSprint();
         boolean fresh = newCore();
+        // the new core always tells the server to stop sprinting right before the hit (a sprinting hit cannot crit)
+        // and starts it again after it; the classic core follows the Legit Sprint setting
+        boolean canPacket = fresh || packetSprint();
 
         if (fresh) {
             if (!newCoreReady(mc)) {
@@ -515,6 +518,7 @@ public final class AttackAura extends Module {
             if (Attack.strike(target, preHit, postHit, InteractionHand.MAIN_HAND)) {
                 this.lastStrikeTick = mc.player.tickCount;
                 this.airWaitTicks = 0;
+                this.groundWaitTicks = 0;
             }
         } else {
             Attack.useEntity(target, preHit, postHit, InteractionHand.MAIN_HAND, true);
@@ -542,15 +546,27 @@ public final class AttackAura extends Module {
         if (this.critMode.value().startsWith("Smart")) {
             boolean inAir = !mc.player.onGround() && !mc.player.onClimbable() && !mc.player.isInWater()
                     && !mc.player.isInLava() && !mc.player.isPassenger() && !mc.player.getAbilities().flying;
-            boolean falling = mc.player.fallDistance > 0.0F && mc.player.getDeltaMovement().y < 0.0;
-            if (!inAir) {
+            // a crit needs a real fall (the server counts fallDistance > 0) and no sprinting; the sprint is dropped
+            // right before the hit by the pre-hit task
+            boolean falling = mc.player.fallDistance > 0.06F && mc.player.getDeltaMovement().y < 0.0;
+            if (inAir) {
+                this.groundWaitTicks = 0;
+                if (!falling && this.airWaitTicks < 12) {
+                    // rising or at the top of the jump: the crit window opens with the fall
+                    this.airWaitTicks++;
+                    why("ждёт падения для крита (макс. 12 тиков)");
+                    return false;
+                }
+            } else {
                 this.airWaitTicks = 0;
-            }
-            if (inAir && !falling && this.airWaitTicks < 8) {
-                // rising: a crit comes with the fall; wait a little, but never longer than 8 ticks
-                this.airWaitTicks++;
-                why("ждёт падения для крита (макс. 8 тиков)");
-                return false;
+                // standing, but about to jump (the jump key is held or the player was in the air a moment ago):
+                // a hit now would be a plain "sweep" hit, so wait a few ticks for the next jump
+                boolean aboutToJump = mc.options.keyJump.isDown() || Attack.ticksSinceAir() <= 2;
+                if (aboutToJump && this.groundWaitTicks < 6) {
+                    this.groundWaitTicks++;
+                    why("стоит на земле, но сейчас прыгнет: ждёт крит (макс. 6 тиков)");
+                    return false;
+                }
             }
         }
         return true;
@@ -572,16 +588,12 @@ public final class AttackAura extends Module {
         Minecraft mc = mc();
         LivingEntity best = null;
         double bestScore = Double.MAX_VALUE;
-        float fov = (float) this.targetFov.value() / 2.0F;
 
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof LivingEntity living) || !isValidTarget(living)) {
                 continue;
             }
-            double fromCamera = AuraUtil.calculateFOVFromCamera(living);
-            if (this.targetFov.value() < 360.0 && fromCamera > fov) {
-                continue;
-            }
+            double fromCamera = viewAngle(living);
             double score = switch (this.priority.value()) {
                 case "Health" -> living.getHealth() + living.getAbsorptionAmount();
                 case "Armor" -> living.getArmorValue() * 100.0 + mc.player.distanceToSqr(living);
@@ -628,13 +640,32 @@ public final class AttackAura extends Module {
         return attackRange() + preRange();
     }
 
+    /** Angle between where the player looks (the camera while the head is turned by the aura) and the target. */
+    private double viewAngle(LivingEntity entity) {
+        Minecraft mc = mc();
+        net.minecraft.world.phys.Vec3 eye = mc.player.getEyePosition();
+        net.minecraft.world.phys.Vec3 to = entity.getBoundingBox().getCenter().subtract(eye);
+        float yaw = FreeLookUtil.detached() ? FreeLookUtil.freeYaw : mc.player.getYRot();
+        float pitch = FreeLookUtil.detached() ? FreeLookUtil.freePitch : mc.player.getXRot();
+        float wantYaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
+        float wantPitch = (float) -Math.toDegrees(Math.atan2(to.y, Math.hypot(to.x, to.z)));
+        float dy = net.minecraft.util.Mth.wrapDegrees(wantYaw - yaw);
+        float dp = wantPitch - pitch;
+        return Math.sqrt(dy * dy + dp * dp);
+    }
+
+    private boolean inFov(LivingEntity entity, double extra) {
+        double fov = this.targetFov.value();
+        return fov >= 360.0 || viewAngle(entity) <= fov / 2.0 + extra;
+    }
+
     private boolean isValidTarget(LivingEntity entity) {
-        return AuraUtil.getStrictDistance(entity) <= auraDist() && isAllowedTarget(entity);
+        return AuraUtil.getStrictDistance(entity) <= auraDist() && isAllowedTarget(entity) && inFov(entity, 0.0);
     }
 
     private boolean canKeep(LivingEntity entity) {
         return AuraUtil.getStrictDistance(entity) <= auraDist() + (float) this.holdMargin.value()
-                && isAllowedTarget(entity);
+                && isAllowedTarget(entity) && inFov(entity, 12.0);
     }
 
     private boolean isAllowedTarget(LivingEntity entity) {
