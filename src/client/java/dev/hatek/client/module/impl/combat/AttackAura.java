@@ -96,11 +96,11 @@ public final class AttackAura extends Module {
             List.of(LEGIT_SPRINT, SMART_CRITS, SLOW_TURN),
             LEGIT_SPRINT, SMART_CRITS, SLOW_TURN);
 
+    private final SliderSetting holdMargin = new SliderSetting("Hold target beyond range (blocks)", 1.5, 0.0, 3.0, 0.25);
     private final BoolSetting chargeSpread = new BoolSetting("Charge Spread", true);
 
     private static final double LOOK_RANGE = 32.0;
 
-    private static final float KEEP_MARGIN = 0.25F;
 
     private static final float ACQUIRE_FOV = 65.0F;
 
@@ -120,7 +120,7 @@ public final class AttackAura extends Module {
         keybind(GLFW.GLFW_KEY_R);
         with(this.attackRange, this.preRange, this.movementType, this.rotationMode, this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.targets, this.misc,
-                this.extras, this.chargeSpread);
+                this.extras, this.holdMargin, this.chargeSpread);
 
         this.neuralChaos.visibleIf(AttackAura::neuralRotation);
         this.neuralAssist.visibleIf(AttackAura::neuralRotation);
@@ -544,7 +544,7 @@ public final class AttackAura extends Module {
     }
 
     private boolean canKeep(LivingEntity entity) {
-        return AuraUtil.getStrictDistance(entity) <= auraDist() + KEEP_MARGIN
+        return AuraUtil.getStrictDistance(entity) <= auraDist() + (float) this.holdMargin.value()
                 && isAllowedTarget(entity);
     }
 
