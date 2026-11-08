@@ -97,6 +97,8 @@ public final class AttackAura extends Module {
             LEGIT_SPRINT, SMART_CRITS, SLOW_TURN);
 
     private final SliderSetting holdMargin = new SliderSetting("Hold target beyond range (blocks)", 1.5, 0.0, 3.0, 0.25);
+    private final BoolSetting debug = new BoolSetting("Debug: писать в чат, почему не бьёт", false);
+    private long lastDebugAt;
     private final BoolSetting chargeSpread = new BoolSetting("Charge Spread", true);
 
     private static final double LOOK_RANGE = 32.0;
@@ -120,7 +122,7 @@ public final class AttackAura extends Module {
         keybind(GLFW.GLFW_KEY_R);
         with(this.attackRange, this.preRange, this.movementType, this.rotationMode, this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.targets, this.misc,
-                this.extras, this.holdMargin, this.chargeSpread);
+                this.extras, this.holdMargin, this.debug, this.chargeSpread);
 
         this.neuralChaos.visibleIf(AttackAura::neuralRotation);
         this.neuralAssist.visibleIf(AttackAura::neuralRotation);
@@ -270,6 +272,8 @@ public final class AttackAura extends Module {
 
         if (!checkToAttack()) {
             attackEntity();
+        } else {
+            why("проверки Checks блокируют удар (ест, открыт инвентарь, в руке не меч/топор при Weapon Only, булава)");
         }
     }
 
@@ -414,9 +418,21 @@ public final class AttackAura extends Module {
         return true;
     }
 
+    private void why(String reason) {
+        long now = System.currentTimeMillis();
+        if (this.debug.value() && now - this.lastDebugAt > 1000L && mc().player != null) {
+            this.lastDebugAt = now;
+            mc().player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§bAttackAura: §f" + reason));
+        }
+    }
+
     public void attackEntity() {
         Minecraft mc = mc();
-        if (target == null || AuraUtil.getStrictDistance(target) >= attackRange()) {
+        if (target == null) {
+            return;
+        }
+        if (AuraUtil.getStrictDistance(target) >= attackRange()) {
+            why(String.format(java.util.Locale.ROOT, "цель далеко для удара: %.2f >= %.2f", AuraUtil.getStrictDistance(target), attackRange()));
             return;
         }
 
@@ -431,18 +447,22 @@ public final class AttackAura extends Module {
                 true, 0L, ranges);
 
         if (!canAttack) {
+            why("Attack.shouldAttack = нет (перезарядка, дальность или удар по лучу не проходит)");
             return;
         }
 
         if (!aimedNow()) {
+            why("не наведён на цель (голова ещё не на хитбоксе)");
             return;
         }
 
         if (!SpaceTime.settled()) {
+            why("ждёт settled");
             return;
         }
 
         if (!canPacket && (serverSprinting || mc.player.isSprinting()) && Attack.critPending()) {
+            why("ждёт крит (сброс спринта)");
             return;
         }
 
