@@ -96,7 +96,7 @@ public final class AttackAura extends Module {
 
     private static final double LOOK_RANGE = 32.0;
 
-    private static final float KEEP_MARGIN = 1.5F;
+    private static final float KEEP_MARGIN = 0.25F;
 
     private static final float ACQUIRE_FOV = 65.0F;
 
