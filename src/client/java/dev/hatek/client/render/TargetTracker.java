@@ -26,6 +26,11 @@ public final class TargetTracker {
         }
     }
 
+    /** Milliseconds since the last attack on a living entity (a large number if there was none). */
+    public static long lastHitAgeMs() {
+        return lastHitAt == 0L ? Long.MAX_VALUE : System.currentTimeMillis() - lastHitAt;
+    }
+
     public static @Nullable LivingEntity current() {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
