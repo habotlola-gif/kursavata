@@ -6,6 +6,7 @@ import dev.hatek.client.module.impl.combat.aura.Attack;
 import dev.hatek.client.module.impl.combat.aura.rotation.ComponentManager;
 import dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
+import dev.hatek.client.module.impl.combat.aura.rotation.HelixRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.NeuralRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.SmoothRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
@@ -50,6 +51,7 @@ public final class AttackAura extends Module {
     public static final String ROT_UNIVERSAL = "Universal Aura";
     public static final String ROT_SMOOTH = "Smooth Rotation";
     public static final String ROT_NEURAL = "Neural Rotation";
+    public static final String ROT_HELIX = "Helix Wave";
 
     public static final String SPACE_TIME = "SpaceTime";
 
@@ -76,7 +78,7 @@ public final class AttackAura extends Module {
     private final ModeSetting movementType =
             new ModeSetting("Movement", 0, MOVE_DEFAULT, MOVE_FREE);
     private final ModeSetting rotationMode =
-            new ModeSetting("Rotation", 0, ROT_UNIVERSAL, ROT_SMOOTH, ROT_NEURAL);
+            new ModeSetting("Rotation", 0, ROT_UNIVERSAL, ROT_SMOOTH, ROT_NEURAL, ROT_HELIX);
     private final SliderSetting neuralChaos = new SliderSetting("Neural: хаотичность (%)", 60.0, 10.0, 120.0, 5.0);
     private final SliderSetting neuralAssist = new SliderSetting("Neural: подправка к цели (%)", 40.0, 0.0, 100.0, 5.0);
     private final SliderSetting smoothSpeed = new SliderSetting("Smooth: aim speed", 1.0, 0.4, 2.5, 0.1);
@@ -112,6 +114,9 @@ public final class AttackAura extends Module {
     private int groundWaitTicks;
     private int lastStrikeTick = -10;
     private final SliderSetting reachSafety = new SliderSetting("New: reach safety (blocks)", 0.15, 0.0, 0.6, 0.05);
+    private final SliderSetting helixSize = new SliderSetting("Helix: wave size (% of the hitbox)", 70.0, 10.0, 120.0, 5.0);
+    private final SliderSetting helixSpeed = new SliderSetting("Helix: wave speed", 1.0, 0.3, 3.0, 0.1);
+    private final SliderSetting helixPull = new SliderSetting("Helix: pull speed", 1.0, 0.4, 2.5, 0.1);
     private final BoolSetting advanced = new BoolSetting("Advanced settings", false);
     private final BoolSetting debug = new BoolSetting("Debug: писать в чат, почему не бьёт", false);
     private long lastDebugAt;
@@ -142,7 +147,8 @@ public final class AttackAura extends Module {
                 this.preRange, this.misc, this.extras, this.attackCore, this.rhythm, this.minCharge, this.critChance,
                 this.reachSafety, this.holdMargin, this.chargeSpread,
                 this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
-                this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir, this.debug);
+                this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir,
+                this.helixSize, this.helixSpeed, this.helixPull, this.debug);
 
         this.critMode.visibleIf(AttackAura::newCore);
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.preRange, this.misc, this.extras,
@@ -155,6 +161,9 @@ public final class AttackAura extends Module {
         }
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.neuralChaos, this.neuralAssist)) {
             setting.visibleIf(() -> this.advanced.value() && neuralRotation());
+        }
+        for (dev.hatek.client.module.setting.Setting setting : List.of(this.helixSize, this.helixSpeed, this.helixPull)) {
+            setting.visibleIf(AttackAura::helixRotation);
         }
         // the Smooth Rotation settings exist only while that rotation is selected
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.smoothSpeed, this.smoothJerk,
@@ -383,7 +392,7 @@ public final class AttackAura extends Module {
     }
 
     public static boolean spaceTime() {
-        return instance != null && !smoothRotation() && !neuralRotation();
+        return instance != null && !smoothRotation() && !neuralRotation() && !helixRotation();
     }
 
     public static boolean newCore() {
@@ -400,6 +409,22 @@ public final class AttackAura extends Module {
 
     public static float neuralAssist() {
         return instance == null ? 0.4f : (float) instance.neuralAssist.value() / 100.0f;
+    }
+
+    public static boolean helixRotation() {
+        return instance != null && instance.rotationMode.is(ROT_HELIX);
+    }
+
+    public static float helixSize() {
+        return instance == null ? 0.7F : (float) instance.helixSize.value() / 100.0F;
+    }
+
+    public static float helixSpeed() {
+        return instance == null ? 1.0F : (float) instance.helixSpeed.value();
+    }
+
+    public static float helixPull() {
+        return instance == null ? 1.0F : (float) instance.helixPull.value();
     }
 
     public static boolean smoothRotation() {
@@ -433,6 +458,9 @@ public final class AttackAura extends Module {
     private static boolean aimedNow() {
         if (neuralRotation()) {
             return NeuralRotation.aimed();
+        }
+        if (helixRotation()) {
+            return HelixRotation.aimed();
         }
         return smoothRotation() ? SmoothRotation.aimed() : SpaceTime.aimed();
     }
@@ -655,6 +683,7 @@ public final class AttackAura extends Module {
         boolean canAttack = Attack.shouldAttack(target, false, true, 0L, ranges);
         SpaceTime.onRotation(target, canAttack);
         SmoothRotation.onRotation(target, canAttack);
+        HelixRotation.onRotation(target, canAttack);
         if (neuralRotation()) {
             NeuralRotation.onTick(target);
         }
@@ -775,6 +804,7 @@ public final class AttackAura extends Module {
         SpaceTime.reshuffleAll();
         SmoothRotation.reshuffleAll();
         NeuralRotation.reshuffleAll();
+        HelixRotation.reshuffleAll();
 
         Attack.getCooldownTimer().reset();
 
@@ -798,6 +828,7 @@ public final class AttackAura extends Module {
         SpaceTime.forget();
         SmoothRotation.forget();
         NeuralRotation.forget();
+        HelixRotation.forget();
 
         releaseSprint();
 
