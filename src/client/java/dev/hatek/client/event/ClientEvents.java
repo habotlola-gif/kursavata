@@ -58,6 +58,7 @@ public final class ClientEvents {
         if (airStuck != null) {
             airStuck.afterTick(mc.player);
         }
+        dev.hatek.client.module.impl.combat.aura.rotation.NeuralRotation.afterTick(mc.player);
         dev.hatek.client.module.impl.combat.OffhandSwapper.afterPlayerTick();
         dev.hatek.client.module.impl.combat.ClickAction.afterPlayerTick();
     }

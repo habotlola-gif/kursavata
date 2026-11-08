@@ -39,6 +39,13 @@ public final class NeuralRotation {
     private static double wanderV;
     private static int wanderLeft;
 
+    // the angles before this tick's turn: the game copies the "old" angles at the end of the tick, which would make the
+    // model jump by a whole step; they are put back afterwards so the head glides between the two ticks at any FPS
+    private static boolean snapValid;
+    private static float snapYaw;
+    private static float snapPitch;
+    private static float snapHead;
+
     private NeuralRotation() {
     }
 
@@ -91,6 +98,17 @@ public final class NeuralRotation {
 
     public static boolean aimed() {
         return aimed;
+    }
+
+    /** End of the player's tick: restore the "old" angles so the model is interpolated instead of stepping. */
+    public static void afterTick(LocalPlayer player) {
+        if (!snapValid) {
+            return;
+        }
+        snapValid = false;
+        player.yRotO = snapYaw;
+        player.xRotO = snapPitch;
+        player.yHeadRotO = snapHead;
     }
 
     /** Once per tick while the aura has a target. */
@@ -173,6 +191,10 @@ public final class NeuralRotation {
         turnYaw = Mth.clamp(turnYaw, -60.0, 60.0);
         turnPitch = Mth.clamp(turnPitch, -20.0, 20.0);
 
+        snapYaw = player.getYRot();
+        snapPitch = player.getXRot();
+        snapHead = player.yHeadRot;
+        snapValid = true;
         RotationProcess.updateFrame(new Rotation(yaw + (float) turnYaw, Mth.clamp(pitch + (float) turnPitch, -90.0f, 90.0f)),
                 90.0f, 40.0f, 90.0f, 40.0f, 10, 1);
 
