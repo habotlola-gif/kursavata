@@ -112,6 +112,7 @@ public final class ShardRotation {
         LivingEntity entity = pendingTarget;
         ThreadLocalRandom rnd = ThreadLocalRandom.current();
         float multi = AttackAura.shardSpeed();
+        float[] tune = AttackAura.shardTuning();
 
         if (currentTarget != entity) {
             currentTarget = entity;
@@ -160,8 +161,8 @@ public final class ShardRotation {
                 RECENT_SPOTS.removeFirst();
             }
             // turning speed limits of this point, in steps of 0.5 degree per tick
-            yawCap = Math.round(range(rnd, 15.0F, 36.0F) * multi * 2.0F) / 2.0F;
-            pitchCap = Math.round(range(rnd, 4.0F, 24.0F) * multi * 2.0F) / 2.0F;
+            yawCap = Math.round(range(rnd, tune[0], tune[1]) * 2.0F) / 2.0F;
+            pitchCap = Math.round(range(rnd, tune[2], tune[3]) * 2.0F) / 2.0F;
         }
 
         // ---------------------------------------------------------------- dynamic speed
@@ -209,12 +210,12 @@ public final class ShardRotation {
             float awayRate = AttackAura.shardAway() * (mc.player.getAttackStrengthScale(0.5F) < 0.5F ? 3.0F : 1.0F);
             if (!ready && rnd.nextFloat() < awayRate * dt) {
                 phase = Phase.AWAY;
-                phaseLeft = (10.0F + 190.0F * (float) Math.pow(rnd.nextFloat(), 1.4)) / 1000.0F;
+                phaseLeft = (10.0F + Math.max(0.0F, tune[5] - 10.0F) * (float) Math.pow(rnd.nextFloat(), 1.4)) / 1000.0F;
                 awayYaw = (rnd.nextBoolean() ? 1.0F : -1.0F) * range(rnd, 10.0F, 45.0F);
                 awayPitch = (rnd.nextBoolean() ? 1.0F : -1.0F) * range(rnd, 5.0F, 20.0F);
             } else if (nextLagIn <= 0.0F) {
                 phase = Phase.LAG;
-                phaseLeft = range(rnd, 0.04F, 0.14F);
+                phaseLeft = range(rnd, 0.04F, Math.max(0.05F, tune[4] / 1000.0F));
                 nextLagIn = range(rnd, 0.25F, 0.9F);
             }
         } else if (phaseLeft <= 0.0F) {

@@ -122,6 +122,12 @@ public final class AttackAura extends Module {
     private final SliderSetting helixPull = new SliderSetting("Helix: pull speed", 1.0, 0.4, 2.5, 0.1);
     private final SliderSetting shardAway = new SliderSetting("Shard: look-aways per second", 1.5, 0.0, 4.0, 0.1);
     private final SliderSetting shardSpeed = new SliderSetting("Shard: multipoint speed", 1.0, 0.5, 2.0, 0.1);
+    private final SliderSetting shardYawMin = new SliderSetting("Shard: yaw speed min (deg/tick)", 15.0, 1.0, 60.0, 0.5);
+    private final SliderSetting shardYawMax = new SliderSetting("Shard: yaw speed max (deg/tick)", 36.0, 1.0, 90.0, 0.5);
+    private final SliderSetting shardPitchMin = new SliderSetting("Shard: pitch speed min (deg/tick)", 4.0, 1.0, 40.0, 0.5);
+    private final SliderSetting shardPitchMax = new SliderSetting("Shard: pitch speed max (deg/tick)", 24.0, 1.0, 60.0, 0.5);
+    private final SliderSetting shardLagMax = new SliderSetting("Shard: yaw freeze, up to (ms)", 140.0, 20.0, 300.0, 10.0);
+    private final SliderSetting shardAwayMax = new SliderSetting("Shard: look-away, up to (ms)", 200.0, 20.0, 400.0, 10.0);
     private final BoolSetting advanced = new BoolSetting("Advanced settings", false);
     private final BoolSetting debug = new BoolSetting("Debug: писать в чат, почему не бьёт", false);
     private long lastDebugAt;
@@ -153,7 +159,8 @@ public final class AttackAura extends Module {
                 this.reachSafety, this.holdMargin, this.chargeSpread,
                 this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir,
-                this.helixSize, this.helixSpeed, this.helixPull, this.shardAway, this.shardSpeed, this.debug);
+                this.helixSize, this.helixSpeed, this.helixPull, this.shardAway, this.shardSpeed,
+                this.shardYawMin, this.shardYawMax, this.shardPitchMin, this.shardPitchMax, this.shardLagMax, this.shardAwayMax, this.debug);
 
         this.critMode.visibleIf(AttackAura::newCore);
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.preRange, this.misc, this.extras,
@@ -172,6 +179,10 @@ public final class AttackAura extends Module {
         }
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.shardAway, this.shardSpeed)) {
             setting.visibleIf(AttackAura::shardRotation);
+        }
+        for (dev.hatek.client.module.setting.Setting setting : List.of(this.shardYawMin, this.shardYawMax,
+                this.shardPitchMin, this.shardPitchMax, this.shardLagMax, this.shardAwayMax)) {
+            setting.visibleIf(() -> this.advanced.value() && shardRotation());
         }
         // the Smooth Rotation settings exist only while that rotation is selected
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.smoothSpeed, this.smoothJerk,
@@ -426,6 +437,19 @@ public final class AttackAura extends Module {
 
     public static float shardAway() {
         return instance == null ? 1.5F : (float) instance.shardAway.value();
+    }
+
+    /** {yawMin, yawMax, pitchMin, pitchMax, lagMaxMs, awayMaxMs} */
+    public static float[] shardTuning() {
+        if (instance == null) {
+            return new float[]{15.0F, 36.0F, 4.0F, 24.0F, 140.0F, 200.0F};
+        }
+        float yawMin = (float) instance.shardYawMin.value();
+        float yawMax = (float) instance.shardYawMax.value();
+        float pitchMin = (float) instance.shardPitchMin.value();
+        float pitchMax = (float) instance.shardPitchMax.value();
+        return new float[]{Math.min(yawMin, yawMax), Math.max(yawMin, yawMax), Math.min(pitchMin, pitchMax),
+                Math.max(pitchMin, pitchMax), (float) instance.shardLagMax.value(), (float) instance.shardAwayMax.value()};
     }
 
     public static float shardSpeed() {
