@@ -24,6 +24,7 @@
     "MouseHandlerMixin",
     "MultiPlayerGameModeMixin",
     "ScreenEffectRendererMixin",
+    "SkyRendererMixin",
     "accessor.GuiGraphicsExtractorAccessor",
     "accessor.KeyMappingAccessor",
     "accessor.LivingEntityAccessor",

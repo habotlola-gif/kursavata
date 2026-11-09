@@ -122,6 +122,8 @@ public final class ModuleManager {
 
         MODULES.add(new dev.hatek.client.module.impl.render.HitCounter());
 
+        MODULES.add(new dev.hatek.client.module.impl.render.CustomSky());
+
         MODULES.add(new dev.hatek.client.module.impl.render.ClientSound());
 
         MODULES.add(new Freecam());
