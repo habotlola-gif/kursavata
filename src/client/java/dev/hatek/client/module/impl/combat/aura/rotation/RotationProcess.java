@@ -67,8 +67,50 @@ public class RotationProcess extends Component {
         }
     }
 
+    private static long resetFrameNanos;
+
+    /**
+     * The way back to the free look (after the aura is switched off or lost the target) is done once per frame: a
+     * smooth ease-out that ends exactly on the camera angle, instead of the tick steps with random pauses that made
+     * the head swing away in jerks.
+     */
+    private void resetFrame() {
+        Minecraft mc = mc();
+        if (!currentTask.equals(RotationTask.RESET) || mc.player == null) {
+            resetFrameNanos = 0L;
+            return;
+        }
+        long now = System.nanoTime();
+        float dt = resetFrameNanos == 0L ? 0.016F : Mth.clamp((now - resetFrameNanos) / 1.0E9F, 0.001F, 0.05F);
+        resetFrameNanos = now;
+        float yawDelta = Mth.wrapDegrees(FreeLookUtil.freeYaw - mc.player.getYRot());
+        float pitchDelta = FreeLookUtil.freePitch - mc.player.getXRot();
+        if (Math.abs(yawDelta) < 0.5F && Math.abs(pitchDelta) < 0.5F) {
+            mc.player.setYRot(mc.player.getYRot() + yawDelta);
+            mc.player.yHeadRot = mc.player.getYRot();
+            mc.player.setXRot(mc.player.getXRot() + pitchDelta);
+            resetFrameNanos = 0L;
+            stopRotation();
+            return;
+        }
+        float follow = 1.0F - (float) Math.exp(-dt * 13.0F);
+        float limit = returnSpeed() * 20.0F * dt;
+        float yawStep = Mth.clamp(yawDelta * follow, -limit, limit);
+        float pitchStep = Mth.clamp(pitchDelta * follow, -limit, limit);
+        // never less than a few hundredths of a degree per frame, so the end does not crawl
+        if (Math.abs(yawStep) < 0.08F) {
+            yawStep = Math.copySign(Math.min(Math.abs(yawDelta), 0.08F), yawDelta);
+        }
+        if (Math.abs(pitchStep) < 0.08F) {
+            pitchStep = Math.copySign(Math.min(Math.abs(pitchDelta), 0.08F), pitchDelta);
+        }
+        applyFrame(GCDUtil.getSensitivity(yawStep), GCDUtil.getSensitivity(pitchStep));
+        idleTicks = 0;
+    }
+
     public void onRender3D() {
         Minecraft mc = mc();
+        resetFrame();
         if (mc.player != null && isRotating()) {
             mc.player.yBodyRot = AuraPlayerUtil.calculateCorrectYawOffset(mc.player.getYRot());
         }
@@ -86,9 +128,6 @@ public class RotationProcess extends Component {
     public void onTick() {
         if (currentTask.equals(RotationTask.AIM) && idleTicks > currentTimeout + RESET_GRACE) {
             currentTask = RotationTask.RESET;
-        }
-        if (currentTask.equals(RotationTask.RESET)) {
-            resetRotation();
         }
         idleTicks++;
     }
