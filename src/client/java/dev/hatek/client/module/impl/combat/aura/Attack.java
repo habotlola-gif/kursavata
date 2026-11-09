@@ -193,15 +193,19 @@ public final class Attack {
         if (mc.player.isEyeInFluid(FluidTags.WATER)) {
             return prePost;
         }
-        boolean restore = mc.player.isSprinting() || serverSprinting;
-
+        // only what the server really knows counts: a stop while it already thinks "not sprinting" (or a start while
+        // it thinks "sprinting") is a duplicate packet, which anticheats kick for
+        boolean[] stopped = {false};
         prePost[0] = () -> {
             mc.player.setSprinting(false);
-            mc.getConnection().send(new ServerboundPlayerCommandPacket(mc.player,
-                    ServerboundPlayerCommandPacket.Action.STOP_SPRINTING));
+            if (ServerView.serverSprinting(mc.player)) {
+                mc.getConnection().send(new ServerboundPlayerCommandPacket(mc.player,
+                        ServerboundPlayerCommandPacket.Action.STOP_SPRINTING));
+                stopped[0] = true;
+            }
         };
         prePost[1] = () -> {
-            if (!restore) {
+            if (!stopped[0] || ServerView.serverSprinting(mc.player)) {
                 return;
             }
             mc.player.setSprinting(true);
