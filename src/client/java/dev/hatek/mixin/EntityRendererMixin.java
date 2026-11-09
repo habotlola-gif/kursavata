@@ -11,13 +11,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(EntityRenderer.class)
 public abstract class EntityRendererMixin {
-    /** NameTags draws its own card, so the vanilla name tag text is dropped (the "below name" score stays). */
+    /** NameTags draws its own card, so the vanilla name tag text is dropped (and the below-name score line, which the card shows itself). */
     @Inject(method = "extractNameTags(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/client/renderer/entity/state/EntityRenderState;FDD)V",
             at = @At("TAIL"))
     private void hatek$hideVanillaNameTag(Entity entity, EntityRenderState state, float partial, double nameTagDistance,
                                           double belowNameDistance, CallbackInfo ci) {
         if (NameTags.replacesVanilla(entity)) {
+            // the "below name" line (for example "20 Здоровья") is moved into the card
+            NameTags.captureScore(entity, state.scoreText);
             state.nameTag = null;
+            state.scoreText = null;
         }
     }
 }
