@@ -138,6 +138,9 @@ public final class ClickAction extends Module {
             reset();
             return;
         }
+        if (dev.hatek.client.module.impl.combat.aura.Attack.attackedThisTick()) {
+            return;     // an attack already went out in this tick: the item action waits for the next one
+        }
         if (stage == 0) {
             if (pending == null || client.gui.screen() != null) {
                 return;

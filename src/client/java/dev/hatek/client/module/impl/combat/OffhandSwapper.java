@@ -116,7 +116,7 @@ public final class OffhandSwapper {
     private void run() {
         Minecraft client = Minecraft.getInstance();
         ++this.tickNumber;
-        if (this.stage == 0) {
+        if (this.stage == 0 || dev.hatek.client.module.impl.combat.aura.Attack.attackedThisTick()) {
             return;
         }
         LocalPlayer player = client.player;

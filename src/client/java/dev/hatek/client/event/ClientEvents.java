@@ -26,10 +26,6 @@ public final class ClientEvents {
         }
         dev.hatek.client.module.impl.combat.OffhandSwapper.beforePlayerTick(mc.player);
         dev.hatek.client.module.impl.combat.ClickAction.beforePlayerTick(mc.player);
-        // the item engines send their packets here, before this tick's movement packet, like a real key press does;
-        // at the end of the client tick they went out after the movement packet ("Post" for the anticheat)
-        dev.hatek.client.module.impl.combat.OffhandSwapper.tick();
-        dev.hatek.client.module.impl.combat.ClickAction.tick();
         dev.hatek.client.module.impl.movement.DragonFly dragonFly = dev.hatek.client.module.impl.movement.DragonFly.instance();
         if (dragonFly != null) {
             dragonFly.beforeTick(mc.player);
@@ -51,6 +47,13 @@ public final class ClientEvents {
         if (aura != null) {
             aura.onTick();
         }
+
+        // the item engines send their packets here: still before this tick's movement packet (a real key press does
+        // the same; at the end of the client tick they went out after it, which Grim reports as "Post"), and after
+        // everything that turns the head in this tick, because the use-item packet carries the rotation and it must
+        // equal the one of the movement packet that follows (BadPacketsJ)
+        dev.hatek.client.module.impl.combat.OffhandSwapper.tick();
+        dev.hatek.client.module.impl.combat.ClickAction.tick();
     }
 
     public static void playerTickEnd() {

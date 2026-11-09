@@ -72,6 +72,14 @@ public final class Attack {
     private static int counterTo0PostMissHits;
 
     private static boolean attackedLastTick;
+    private static int lastAttackPlayerTick = Integer.MIN_VALUE;
+
+    /** True when an attack was already sent in this player tick (other actions wait for the next one). */
+    public static boolean attackedThisTick() {
+        Minecraft mc = mc();
+        return mc.player != null && mc.player.tickCount == lastAttackPlayerTick;
+    }
+
 
     private static final int FAR_PAST = Integer.MIN_VALUE / 2;
 
@@ -345,6 +353,7 @@ public final class Attack {
                 freeStrike = false;
             }
             attackedLastTick = true;
+            lastAttackPlayerTick = mc.player.tickCount;
             if (hand != null) {
                 mc.player.swing(hand);
             }
@@ -373,6 +382,7 @@ public final class Attack {
                 auraAttacking = false;
             }
             attackedLastTick = true;
+            lastAttackPlayerTick = mc.player.tickCount;
 
             PACE.markAura(mc.player.tickCount);
 
