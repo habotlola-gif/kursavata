@@ -65,6 +65,7 @@ public final class ComponentManager extends HashMap<Class<? extends Component>, 
         SpaceTime.onFrame();
         SmoothRotation.onFrame();
         HelixRotation.onFrame();
+        ShardRotation.onFrame();
     }
 
     public static void packetSent(Packet<?> packet) {

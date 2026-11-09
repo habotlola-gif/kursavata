@@ -9,6 +9,7 @@ import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
 import dev.hatek.client.module.impl.combat.aura.rotation.HelixRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.NeuralRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
+import dev.hatek.client.module.impl.combat.aura.rotation.ShardRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.SmoothRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
@@ -53,6 +54,7 @@ public final class AttackAura extends Module {
     public static final String ROT_SMOOTH = "Smooth Rotation";
     public static final String ROT_NEURAL = "Neural Rotation";
     public static final String ROT_HELIX = "Helix Wave";
+    public static final String ROT_SHARD = "Shard Rotation";
 
     public static final String SPACE_TIME = "SpaceTime";
 
@@ -79,7 +81,7 @@ public final class AttackAura extends Module {
     private final ModeSetting movementType =
             new ModeSetting("Movement", 0, MOVE_DEFAULT, MOVE_FREE);
     private final ModeSetting rotationMode =
-            new ModeSetting("Rotation", 0, ROT_UNIVERSAL, ROT_SMOOTH, ROT_NEURAL, ROT_HELIX);
+            new ModeSetting("Rotation", 0, ROT_UNIVERSAL, ROT_SMOOTH, ROT_NEURAL, ROT_HELIX, ROT_SHARD);
     private final SliderSetting neuralChaos = new SliderSetting("Neural: хаотичность (%)", 60.0, 10.0, 120.0, 5.0);
     private final SliderSetting neuralAssist = new SliderSetting("Neural: подправка к цели (%)", 40.0, 0.0, 100.0, 5.0);
     private final SliderSetting smoothSpeed = new SliderSetting("Smooth: aim speed", 1.0, 0.4, 2.5, 0.1);
@@ -118,6 +120,8 @@ public final class AttackAura extends Module {
     private final SliderSetting helixSize = new SliderSetting("Helix: wave size (% of the hitbox)", 70.0, 10.0, 120.0, 5.0);
     private final SliderSetting helixSpeed = new SliderSetting("Helix: wave speed", 1.0, 0.3, 3.0, 0.1);
     private final SliderSetting helixPull = new SliderSetting("Helix: pull speed", 1.0, 0.4, 2.5, 0.1);
+    private final SliderSetting shardAway = new SliderSetting("Shard: look-aways per second", 1.5, 0.0, 4.0, 0.1);
+    private final SliderSetting shardSpeed = new SliderSetting("Shard: multipoint speed", 1.0, 0.5, 2.0, 0.1);
     private final BoolSetting advanced = new BoolSetting("Advanced settings", false);
     private final BoolSetting debug = new BoolSetting("Debug: писать в чат, почему не бьёт", false);
     private long lastDebugAt;
@@ -149,7 +153,7 @@ public final class AttackAura extends Module {
                 this.reachSafety, this.holdMargin, this.chargeSpread,
                 this.neuralChaos, this.neuralAssist, this.smoothSpeed, this.smoothJerk,
                 this.smoothPattern, this.smoothPatternSpeed, this.smoothPatternSize, this.smoothLowerInAir,
-                this.helixSize, this.helixSpeed, this.helixPull, this.debug);
+                this.helixSize, this.helixSpeed, this.helixPull, this.shardAway, this.shardSpeed, this.debug);
 
         this.critMode.visibleIf(AttackAura::newCore);
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.preRange, this.misc, this.extras,
@@ -165,6 +169,9 @@ public final class AttackAura extends Module {
         }
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.helixSize, this.helixSpeed, this.helixPull)) {
             setting.visibleIf(AttackAura::helixRotation);
+        }
+        for (dev.hatek.client.module.setting.Setting setting : List.of(this.shardAway, this.shardSpeed)) {
+            setting.visibleIf(AttackAura::shardRotation);
         }
         // the Smooth Rotation settings exist only while that rotation is selected
         for (dev.hatek.client.module.setting.Setting setting : List.of(this.smoothSpeed, this.smoothJerk,
@@ -394,7 +401,7 @@ public final class AttackAura extends Module {
     }
 
     public static boolean spaceTime() {
-        return instance != null && !smoothRotation() && !neuralRotation() && !helixRotation();
+        return instance != null && !smoothRotation() && !neuralRotation() && !helixRotation() && !shardRotation();
     }
 
     public static boolean newCore() {
@@ -411,6 +418,18 @@ public final class AttackAura extends Module {
 
     public static float neuralAssist() {
         return instance == null ? 0.4f : (float) instance.neuralAssist.value() / 100.0f;
+    }
+
+    public static boolean shardRotation() {
+        return instance != null && instance.rotationMode.is(ROT_SHARD);
+    }
+
+    public static float shardAway() {
+        return instance == null ? 1.5F : (float) instance.shardAway.value();
+    }
+
+    public static float shardSpeed() {
+        return instance == null ? 1.0F : (float) instance.shardSpeed.value();
     }
 
     public static boolean helixRotation() {
@@ -463,6 +482,9 @@ public final class AttackAura extends Module {
         }
         if (helixRotation()) {
             return HelixRotation.aimed();
+        }
+        if (shardRotation()) {
+            return ShardRotation.aimed();
         }
         return smoothRotation() ? SmoothRotation.aimed() : SpaceTime.aimed();
     }
@@ -700,6 +722,7 @@ public final class AttackAura extends Module {
         SpaceTime.onRotation(target, canAttack);
         SmoothRotation.onRotation(target, canAttack);
         HelixRotation.onRotation(target, canAttack);
+        ShardRotation.onRotation(target, canAttack);
         if (neuralRotation()) {
             NeuralRotation.onTick(target);
         }
@@ -821,6 +844,7 @@ public final class AttackAura extends Module {
         SmoothRotation.reshuffleAll();
         NeuralRotation.reshuffleAll();
         HelixRotation.reshuffleAll();
+        ShardRotation.reshuffleAll();
 
         Attack.getCooldownTimer().reset();
 
@@ -845,6 +869,7 @@ public final class AttackAura extends Module {
         SmoothRotation.forget();
         NeuralRotation.forget();
         HelixRotation.forget();
+        ShardRotation.forget();
 
         releaseSprint();
 
