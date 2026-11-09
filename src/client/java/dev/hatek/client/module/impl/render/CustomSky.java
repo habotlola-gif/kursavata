@@ -42,8 +42,8 @@ public final class CustomSky extends Module {
     private static final int STAR_GROUPS = 3;
 
     private final BoolSetting gradient = new BoolSetting("Night gradient", true);
-    private final ColorSetting horizon = new ColorSetting("Gradient: horizon", 0xFF3B2A7A);
-    private final ColorSetting zenith = new ColorSetting("Gradient: zenith", 0xFF050824);
+    private final ColorSetting horizon = new ColorSetting("Gradient: horizon", 0xFF1A2A5E);
+    private final ColorSetting zenith = new ColorSetting("Gradient: zenith", 0xFF03040F);
     private final SliderSetting gradientStrength = new SliderSetting("Gradient strength (%)", 80.0, 10.0, 100.0, 5.0);
     private final BoolSetting stars = new BoolSetting("Starry sky", true);
     private final SliderSetting density = new SliderSetting("Stars: amount", 3500.0, 500.0, 9000.0, 250.0);
@@ -53,7 +53,7 @@ public final class CustomSky extends Module {
     private final BoolSetting aurora = new BoolSetting("Aurora", true);
     private final ColorSetting auroraLow = new ColorSetting("Aurora: lower color", 0xFF3CFF9A);
     private final ColorSetting auroraHigh = new ColorSetting("Aurora: upper color", 0xFFA45CFF);
-    private final SliderSetting auroraIntensity = new SliderSetting("Aurora: intensity (%)", 90.0, 10.0, 200.0, 5.0);
+    private final SliderSetting auroraIntensity = new SliderSetting("Aurora: intensity (%)", 100.0, 10.0, 200.0, 5.0);
     private final SliderSetting auroraHeight = new SliderSetting("Aurora: height (degrees)", 38.0, 15.0, 70.0, 1.0);
     private final SliderSetting auroraSpeed = new SliderSetting("Aurora: speed (%)", 100.0, 20.0, 300.0, 10.0);
     private final SliderSetting auroraDirection = new SliderSetting("Aurora: direction (degrees, 0 = north)", 0.0, -180.0, 180.0, 5.0);
@@ -132,7 +132,7 @@ public final class CustomSky extends Module {
                 self.buildDome(h, z);
             }
             self.draw(target, pose, self.domeBuffer, self.domeIndexCount,
-                    visible * (float) self.gradientStrength.value() / 100.0f);
+                    visible * (float) self.gradientStrength.value() / 100.0f, false);
         } catch (Throwable t) {
             self.fail(t);
         }
@@ -161,7 +161,7 @@ public final class CustomSky extends Module {
                 float level = (float) self.starBrightness.value() / 100.0f;
                 for (int g = 0; g < STAR_GROUPS; g++) {
                     float flicker = self.twinkle.value() ? 0.72f + 0.28f * (float) Math.sin(seconds * (1.3 + g * 0.55) + g * 2.1) : 1.0f;
-                    self.draw(target, pose, self.starBuffers[g], self.starIndexCounts[g], visible * level * flicker);
+                    self.draw(target, pose, self.starBuffers[g], self.starIndexCounts[g], visible * level * flicker, true);
                 }
                 pose.popPose();
             }
@@ -199,7 +199,12 @@ public final class CustomSky extends Module {
 
     // ------------------------------------------------------------------------------------------------ drawing
 
-    private void draw(RenderTarget target, PoseStack pose, GpuBuffer buffer, int indexCount, float alpha) {
+    /**
+     * Draws a mesh. Additive meshes (stars, aurora) glow on the dark sky: their colours are already multiplied by
+     * their brightness and the overall fade goes through the colour of the modulator; the translucent dome fades
+     * through the alpha of the modulator.
+     */
+    private void draw(RenderTarget target, PoseStack pose, GpuBuffer buffer, int indexCount, float alpha, boolean additive) {
         if (buffer == null || indexCount <= 0 || alpha <= 0.002f) {
             return;
         }
@@ -207,13 +212,14 @@ public final class CustomSky extends Module {
         modelView.pushMatrix();
         modelView.mul(pose.last().pose());
         try {
+            float fade = Mth.clamp(alpha, 0.0f, 1.0f);
             GpuBufferSlice transform = RenderSystem.getDynamicUniforms().writeTransform(new Matrix4f(modelView),
-                    new Vector4f(1.0f, 1.0f, 1.0f, Mth.clamp(alpha, 0.0f, 1.0f)));
+                    additive ? new Vector4f(fade, fade, fade, 1.0f) : new Vector4f(1.0f, 1.0f, 1.0f, fade));
             RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
             try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                     () -> "hatek custom sky", target.getColorTextureView(), Optional.empty(),
                     target.getDepthTextureView(), OptionalDouble.empty())) {
-                pass.setPipeline(RenderPipelines.GUI);
+                pass.setPipeline(additive ? RenderPipelines.GUI_TEXT_HIGHLIGHT : RenderPipelines.GUI);
                 RenderSystem.bindDefaultUniforms(pass);
                 pass.setUniform("DynamicTransforms", transform);
                 pass.setVertexBuffer(0, buffer.slice());
@@ -233,7 +239,7 @@ public final class CustomSky extends Module {
         int[] counts = new int[1];
         GpuBuffer buffer = upload(verts, counts);
         try {
-            draw(target, pose, buffer, counts[0], visible);
+            draw(target, pose, buffer, counts[0], visible, true);
         } finally {
             buffer.close();
         }
@@ -367,10 +373,10 @@ public final class CustomSky extends Module {
                     quads[at] = dx * radius + ux * ox + vxx * oy;
                     quads[at + 1] = y * radius + vyy * oy;
                     quads[at + 2] = dz * radius + uz * ox + vzz * oy;
-                    quads[at + 3] = r;
-                    quads[at + 4] = gg;
-                    quads[at + 5] = b;
-                    quads[at + 6] = brightness;
+                    quads[at + 3] = r * brightness;
+                    quads[at + 4] = gg * brightness;
+                    quads[at + 5] = b * brightness;
+                    quads[at + 6] = 1.0f;
                 }
             }
             int[] counts = new int[1];
@@ -382,62 +388,116 @@ public final class CustomSky extends Module {
 
     // ------------------------------------------------------------------------------------------------ aurora
 
-    /** The aurora curtains as a list of quads (7 floats per vertex), rebuilt every frame. */
+    /**
+     * The aurora as a list of quads (7 floats per vertex, premultiplied colour for the additive pipeline), rebuilt
+     * every frame. Two curtains of vertical rays: a bright lower edge with a pink fringe that fades up into a long
+     * soft tail, rays whose brightness and height drift along the curtain, a folded path that is brighter where it is
+     * seen edge-on. The shape was tuned against an offline preview of the same formulas.
+     */
     private static final class AuroraMesh {
-        private static final int CURTAINS = 3;
-        private static final int COLUMNS = 72;
-        private static final int ROWS = 8;
+        private static final int CURTAINS = 2;
+        private static final int COLUMNS = 140;
+        private static final int ROWS = 14;
+        private static final float[] FRINGE = {1.0f, 0.24f, 0.55f};
+
+        private static double hash(double k, int seed) {
+            double v = Math.sin(k * 127.1 + seed * 311.7) * 43758.5453;
+            return v - Math.floor(v);
+        }
+
+        /** Smooth value noise along one axis. */
+        private static double noise(double x, int seed) {
+            double i = Math.floor(x);
+            double f = x - i;
+            double a = hash(i, seed);
+            double b = hash(i + 1.0, seed);
+            double s = f * f * (3.0 - 2.0 * f);
+            return a + (b - a) * s;
+        }
 
         static float[] build(double t, int lowColor, int highColor, float intensity, float height, float directionDeg) {
-            float[] out = new float[CURTAINS * COLUMNS * ROWS * 28];
-            int at = 0;
             float[] low = {((lowColor >> 16) & 0xFF) / 255.0f, ((lowColor >> 8) & 0xFF) / 255.0f, (lowColor & 0xFF) / 255.0f};
             float[] high = {((highColor >> 16) & 0xFF) / 255.0f, ((highColor >> 8) & 0xFF) / 255.0f, (highColor & 0xFF) / 255.0f};
+            float[] out = new float[CURTAINS * COLUMNS * ROWS * 28];
+            int at = 0;
+            double[] vs = new double[ROWS + 1];
+            for (int j = 0; j <= ROWS; j++) {
+                vs[j] = Math.pow((double) j / ROWS, 1.7);
+            }
+            int stride = ROWS + 1;
+            float[] grid = new float[(COLUMNS + 1) * stride * 6];
             for (int c = 0; c < CURTAINS; c++) {
-                float heading = directionDeg + (c - 1) * 34.0f + (float) Math.sin(t * 0.035 + c * 1.7) * 14.0f;
-                float halfSpan = 62.0f - c * 6.0f;
-                float baseElevation = 7.0f + c * 5.0f;
-                float weight = c == 0 ? 1.0f : c == 1 ? 0.7f : 0.5f;
-                float radius = 92.0f - c * 2.0f;
+                double heading = directionDeg + (c - 0.5 * (CURTAINS - 1)) * 46.0 + Math.sin(t * 0.035 + c * 1.7) * 14.0;
+                double half = 58.0 - c * 8.0;
+                double weight = c == 0 ? 1.0 : 0.62;
+                double radiusBase = 90.0 - c * 3.0;
+                for (int i = 0; i <= COLUMNS; i++) {
+                    double u = (double) i / COLUMNS;
+                    double wave = 7.0 * Math.sin(u * 5.3 + t * 0.30 + c) + 3.5 * Math.sin(u * 11.7 - t * 0.45 + c * 2.0)
+                            + 1.6 * Math.sin(u * 23.0 - t * 0.8);
+                    double azimuth = Math.toRadians(heading + (u - 0.5) * 2.0 * half + wave);
+                    double radius = radiusBase * (1.0 + 0.07 * Math.sin(u * 9.1 + t * 0.22 + c * 1.3) + 0.04 * Math.sin(u * 21.0 - t * 0.5));
+                    double ray = Math.pow(0.08 + 0.92 * noise(u * 52.0 + t * 0.55, c + 3), 1.6);
+                    double ray2 = noise(u * 13.0 - t * 0.25, c + 9);
+                    double level = Math.min(1.0, ray * (0.45 + 0.9 * ray2) * 1.5) * (0.88 + 0.12 * Math.sin(t * 1.3 + u * 40.0 + c));
+                    double top = height * (0.5 + 0.5 * noise(u * 7.0 + t * 0.12, c + 21)) * (0.45 + 0.8 * level);
+                    double base = 13.0 + 5.0 * Math.sin(u * 4.0 + t * 0.18 + c) + 2.0 * Math.sin(u * 13.0 - t * 0.3);
+                    double envelope = Math.pow(Math.max(0.0, Math.sin(Math.PI * u)), 0.55);
+                    double fold = 1.0 + 0.8 * Math.min(1.0, Math.abs(0.07 * 9.1 * Math.cos(u * 9.1 + t * 0.22 + c * 1.3)));
+                    double column = intensity * weight * envelope * level * fold;
+                    float x = (float) (radius * Math.sin(azimuth));
+                    float z = (float) (-radius * Math.cos(azimuth));
+                    for (int j = 0; j <= ROWS; j++) {
+                        double v = vs[j];
+                        double profile = (Math.exp(-v * 2.6) * 0.85 + 0.15 * (1.0 - v) * (1.0 - v))
+                                * Math.pow(Math.min(1.0, v / 0.05), 0.8) * Math.pow(1.0 - v, 0.9);
+                        double edge = Math.exp(-(v / 0.05) * (v / 0.05));
+                        double b = column * profile;
+                        float cr;
+                        float cg;
+                        float cb;
+                        if (v < 0.09) {
+                            double k = v / 0.09;
+                            cr = (float) ((FRINGE[0] * 0.6 + low[0] * 0.4) * (1.0 - k) + low[0] * k);
+                            cg = (float) ((FRINGE[1] * 0.6 + low[1] * 0.4) * (1.0 - k) + low[1] * k);
+                            cb = (float) ((FRINGE[2] * 0.6 + low[2] * 0.4) * (1.0 - k) + low[2] * k);
+                        } else {
+                            double m = Math.pow(Math.min(1.0, (v - 0.09) / 0.8), 0.9);
+                            cr = (float) (low[0] * (1.0 - m) + high[0] * m);
+                            cg = (float) (low[1] * (1.0 - m) + high[1] * m);
+                            cb = (float) (low[2] * (1.0 - m) + high[2] * m);
+                        }
+                        float glow = (float) (edge * b * 0.12);
+                        int g = (i * stride + j) * 6;
+                        grid[g] = x;
+                        grid[g + 1] = (float) (base + v * top);
+                        grid[g + 2] = z;
+                        grid[g + 3] = (float) (cr * b * 1.15) + glow;
+                        grid[g + 4] = (float) (cg * b * 1.15) + glow;
+                        grid[g + 5] = (float) (cb * b * 1.15) + glow;
+                    }
+                }
                 for (int i = 0; i < COLUMNS; i++) {
-                    float u0 = (float) i / COLUMNS;
-                    float u1 = (float) (i + 1) / COLUMNS;
                     for (int j = 0; j < ROWS; j++) {
-                        float v0 = (float) j / ROWS;
-                        float v1 = (float) (j + 1) / ROWS;
-                        at = vertex(out, at, t, c, u0, v0, heading, halfSpan, baseElevation, height, radius, intensity * weight, low, high);
-                        at = vertex(out, at, t, c, u1, v0, heading, halfSpan, baseElevation, height, radius, intensity * weight, low, high);
-                        at = vertex(out, at, t, c, u1, v1, heading, halfSpan, baseElevation, height, radius, intensity * weight, low, high);
-                        at = vertex(out, at, t, c, u0, v1, heading, halfSpan, baseElevation, height, radius, intensity * weight, low, high);
+                        at = put(out, at, grid, i, j, stride);
+                        at = put(out, at, grid, i + 1, j, stride);
+                        at = put(out, at, grid, i + 1, j + 1, stride);
+                        at = put(out, at, grid, i, j + 1, stride);
                     }
                 }
             }
             return out;
         }
 
-        private static int vertex(float[] out, int at, double t, int curtain, float u, float v, float heading, float halfSpan,
-                                  float baseElevation, float height, float radius, float strength, float[] low, float[] high) {
-            // the curtain waves sideways and its height breathes
-            float wave = (float) (6.0 * Math.sin(u * 7.0 + t * 0.35 + curtain) + 3.0 * Math.sin(u * 17.0 - t * 0.6 + curtain * 2.0));
-            float azimuth = (float) Math.toRadians(heading + (u - 0.5f) * 2.0f * halfSpan + wave);
-            float breathe = 1.0f + 0.14f * (float) Math.sin(u * 5.0 + t * 0.21 + curtain);
-            float elevation = (float) Math.toRadians(baseElevation + v * height * breathe);
-
-            // brightness: the ends of the curtain fade out, the rays flicker along it, the lower edge is the brightest
-            float envelope = (float) Math.pow(Math.max(0.0, Math.sin(Math.PI * u)), 0.7);
-            float rays = 0.55f + 0.45f * (float) (Math.sin(u * 41.0 + t * 1.1 + curtain * 2.0) * Math.sin(u * 13.0 - t * 0.7));
-            float rise = Math.min(1.0f, v / 0.12f);
-            float fall = (float) Math.pow(Math.max(0.0f, 1.0f - v), 1.5);
-            float alpha = Mth.clamp(strength * 0.55f * envelope * (0.4f + 0.6f * rays) * (0.25f + 0.75f * rise) * fall, 0.0f, 1.0f);
-
-            float mix = (float) Math.pow(v, 0.8);
-            out[at] = radius * Mth.cos(elevation) * Mth.sin(azimuth);
-            out[at + 1] = radius * Mth.sin(elevation);
-            out[at + 2] = -radius * Mth.cos(elevation) * Mth.cos(azimuth);
-            out[at + 3] = Mth.lerp(mix, low[0], high[0]);
-            out[at + 4] = Mth.lerp(mix, low[1], high[1]);
-            out[at + 5] = Mth.lerp(mix, low[2], high[2]);
-            out[at + 6] = alpha;
+        private static int put(float[] out, int at, float[] grid, int i, int j, int stride) {
+            int g = (i * stride + j) * 6;
+            out[at] = grid[g];
+            out[at + 1] = grid[g + 1];
+            out[at + 2] = grid[g + 2];
+            out[at + 3] = grid[g + 3];
+            out[at + 4] = grid[g + 4];
+            out[at + 5] = grid[g + 5];
+            out[at + 6] = 1.0f;
             return at + 7;
         }
     }
