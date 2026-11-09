@@ -74,6 +74,7 @@ public final class CrystalAura extends Module {
     private final BoolSetting auto = new BoolSetting("Auto (continuous)", true);
     private final BoolSetting dig = new BoolSetting("Dig + obsidian when there is no base", true);
     private final BoolSetting render = new BoolSetting("Highlight the spots", true);
+    private final BoolSetting debug = new BoolSetting("Debug: say why nothing happens", false);
     private final ColorSetting obsidianColor = new ColorSetting("Highlight: obsidian / dig", 0xFFB05CFF);
     private final ColorSetting crystalColor = new ColorSetting("Highlight: crystal", 0xFF4FE8FF);
 
@@ -111,7 +112,7 @@ public final class CrystalAura extends Module {
         instance = this;
         with(this.targetRange, this.placeRange, this.breakRange, this.minDamage, this.maxSelf, this.safe, this.hands,
                 this.placeDelay, this.breakDelay, this.randomize, this.rotate, this.players, this.shotKey, this.auto, this.dig,
-                this.render, this.obsidianColor, this.crystalColor);
+                this.render, this.obsidianColor, this.crystalColor, this.debug);
         this.obsidianColor.visibleIf(this.render::value);
         this.crystalColor.visibleIf(this.render::value);
     }
@@ -177,6 +178,9 @@ public final class CrystalAura extends Module {
         }
         this.ticksSincePlace++;
         this.ticksSinceBreak++;
+        if (this.prepareCooldown > 0) {
+            this.prepareCooldown--;
+        }
         // one action per tick, never while an item is used or another module is busy with items
         if (Attack.attackedThisTick() || player.isUsingItem() || ClickAction.busy() || OffhandSwapper.busy()) {
             return;
@@ -187,6 +191,7 @@ public final class CrystalAura extends Module {
             if (this.phase != Phase.IDLE) {
                 cancelShot(null);
             } else if (target != null) {
+                this.silentPrepare = false;
                 startShot(player, target);
             } else {
                 say("нет цели рядом");
@@ -196,6 +201,7 @@ public final class CrystalAura extends Module {
             if (this.phase != Phase.IDLE) {
                 cancelShot("цель пропала");
             }
+            why("нет цели: игрок в радиусе " + (int) this.targetRange.value() + " блоков не найден (друзья и креатив пропускаются)");
             return;
         }
         if (this.phase != Phase.IDLE) {
@@ -227,15 +233,44 @@ public final class CrystalAura extends Module {
         }
         Spot spot = bestSpot(player, target);
         if (spot == null) {
+            why("нет места для кристалла: " + this.spotInfo);
+            if (this.dig.value() && this.prepareCooldown <= 0) {
+                // no obsidian near the enemy: make a base (dig the block, put obsidian in)
+                BlockPos base = bestPrepare(player, target);
+                if (base != null) {
+                    this.phase = Phase.PREPARE;
+                    this.shotBase = base;
+                    this.shotTicks = 0;
+                    this.silentPrepare = true;
+                    why("готовлю основание под обсидиан");
+                } else {
+                    this.prepareCooldown = 10;
+                    why("нет места и для нового обсидиана рядом с целью");
+                }
+            }
+            return;
+        }
+        if (crystalHand(player) == null && hotbarCrystalSlot(player) < 0) {
+            why("нет кристаллов: " + (this.hands.value().startsWith("Hotbar") ? "в хотбаре" : "в руках") + " их нет");
             return;
         }
         if (placeCrystalAt(player, spot.pos())) {
             this.ticksSincePlace = 0;
             this.placeJitter = this.randomize.value() ? ThreadLocalRandom.current().nextInt(2) : 0;
+        } else {
+            why("кристалл: разворачивается к блоку / угол ещё не дошёл до сервера");
         }
     }
 
     // ------------------------------------------------------------------------------------------------ single shot
+
+    private void why(String text) {
+        long now = System.currentTimeMillis();
+        if (this.debug.value() && now - this.lastWhyAt > 1000L) {
+            this.lastWhyAt = now;
+            say(text);
+        }
+    }
 
     private void say(String text) {
         Minecraft mc = mc();
@@ -245,10 +280,17 @@ public final class CrystalAura extends Module {
     }
 
     private void cancelShot(String reason) {
+        boolean silent = this.silentPrepare;
         this.phase = Phase.IDLE;
+        this.silentPrepare = false;
+        this.prepareCooldown = 20;
         stopDigging();
         if (reason != null) {
-            say(reason);
+            if (silent) {
+                why(reason);
+            } else {
+                say(reason);
+            }
         }
     }
 
@@ -312,7 +354,11 @@ public final class CrystalAura extends Module {
         if (state.is(Blocks.OBSIDIAN) || state.is(Blocks.BEDROCK)) {
             stopDigging();
             this.phase = Phase.IDLE;
-            say("обсидиан стоит, нажми ещё раз для взрыва");
+            if (this.silentPrepare) {
+                this.silentPrepare = false;
+            } else {
+                say("обсидиан стоит, нажми ещё раз для взрыва");
+            }
             return;
         }
         if (!state.isAir() && !state.canBeReplaced()) {
@@ -478,6 +524,10 @@ public final class CrystalAura extends Module {
     }
 
     private int savedSlot = -1;
+    private boolean silentPrepare;
+    private int prepareCooldown;
+    private long lastWhyAt;
+    private String spotInfo = "";
 
     private void stopDigging() {
         Minecraft mc = mc();
@@ -723,6 +773,9 @@ public final class CrystalAura extends Module {
         }
         record Candidate(BlockPos pos, double bound) {}
         List<Candidate> candidates = new ArrayList<>();
+        int bases = 0;
+        int inRange = 0;
+        int roomed = 0;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dy = -radius; dy <= radius; dy++) {
@@ -732,6 +785,7 @@ public final class CrystalAura extends Module {
                     if (!base.is(Blocks.OBSIDIAN) && !base.is(Blocks.BEDROCK)) {
                         continue;
                     }
+                    bases++;
                     if (!mc.level.getBlockState(cursor.above()).isAir() || !mc.level.getBlockState(cursor.above(2)).isAir()) {
                         continue;
                     }
@@ -740,6 +794,7 @@ public final class CrystalAura extends Module {
                     if (center.distanceTo(eye) > this.placeRange.value() + 0.5 || center.distanceTo(target.position()) > 10.0) {
                         continue;
                     }
+                    inRange++;
                     AABB space = new AABB(pos.getX(), pos.getY() + 1.0, pos.getZ(), pos.getX() + 1.0, pos.getY() + 3.0, pos.getZ() + 1.0);
                     boolean blocked = false;
                     for (Entity entity : crowd) {
@@ -763,6 +818,10 @@ public final class CrystalAura extends Module {
         candidates.sort(Comparator.comparingDouble(Candidate::bound).reversed());
         Spot best = null;
         int checked = 0;
+        int tooWeak = 0;
+        int unsafe = 0;
+        int hidden = 0;
+        double bestSeen = 0.0;
         for (Candidate candidate : candidates) {
             if (checked++ >= 10) {
                 break;
@@ -770,10 +829,17 @@ public final class CrystalAura extends Module {
             Vec3 center = new Vec3(candidate.pos().getX() + 0.5, candidate.pos().getY() + 1.0, candidate.pos().getZ() + 0.5);
             double enemy = damage(center, target);
             double mine = damage(center, player);
+            bestSeen = Math.max(bestSeen, enemy);
             if (!acceptable(player, enemy, mine, target)) {
+                if (enemy < this.minDamage.value()) {
+                    tooWeak++;
+                } else {
+                    unsafe++;
+                }
                 continue;
             }
             if (faceOf(player, candidate.pos(), false) == null) {
+                hidden++;
                 continue;
             }
             Spot spot = new Spot(candidate.pos(), enemy, mine);
@@ -781,6 +847,9 @@ public final class CrystalAura extends Module {
                 best = spot;
             }
         }
+        this.spotInfo = String.format(java.util.Locale.ROOT,
+                "обсидиана/бедрока в радиусе %d, подходящих по дальности %d, с местом сверху и по урону %d, мало урона врагу %d (макс. %.1f), опасно для тебя %d, не видно %d",
+                bases, inRange, candidates.size(), tooWeak, bestSeen, unsafe, hidden);
         return best;
     }
 
