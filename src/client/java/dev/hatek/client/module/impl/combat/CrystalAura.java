@@ -8,9 +8,13 @@ import dev.hatek.client.module.impl.combat.aura.rotation.Rotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
 import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
 import dev.hatek.client.module.setting.BoolSetting;
+import dev.hatek.client.module.setting.ColorSetting;
+import dev.hatek.client.module.setting.KeySetting;
 import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.SliderSetting;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -25,7 +29,9 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -64,6 +70,30 @@ public final class CrystalAura extends Module {
     private final BoolSetting rotate = new BoolSetting("Turn the head (the server checks the angle)", true);
     private final BoolSetting players = new BoolSetting("Ignore friends", true);
 
+    private final KeySetting shotKey = new KeySetting("Single shot (key)", -1);
+    private final BoolSetting auto = new BoolSetting("Auto (continuous)", true);
+    private final BoolSetting dig = new BoolSetting("Dig + obsidian when there is no base", true);
+    private final BoolSetting render = new BoolSetting("Highlight the spots", true);
+    private final ColorSetting obsidianColor = new ColorSetting("Highlight: obsidian / dig", 0xFFB05CFF);
+    private final ColorSetting crystalColor = new ColorSetting("Highlight: crystal", 0xFF4FE8FF);
+
+    private enum Phase { IDLE, CRYSTAL, PREPARE }
+
+    private Phase phase = Phase.IDLE;
+    private BlockPos shotBase;
+    private int shotTicks;
+    private boolean keyWas;
+    private boolean shotRequested;
+    private boolean digging;
+    private BlockPos digPos;
+    private int digSlot = -1;
+
+    // what is drawn: the block that will get obsidian (or be dug), the base of the next crystal, the crystal to break
+    private BlockPos espObsidian;
+    private BlockPos espBase;
+    private AABB espCrystal;
+    private long espAt;
+
     private int ticksSincePlace = 99;
     private int ticksSinceBreak = 99;
     private int placeJitter;
@@ -80,7 +110,10 @@ public final class CrystalAura extends Module {
         super("CrystalAura", "Places and breaks end crystals around the nearest enemy", Category.COMBAT);
         instance = this;
         with(this.targetRange, this.placeRange, this.breakRange, this.minDamage, this.maxSelf, this.safe, this.hands,
-                this.placeDelay, this.breakDelay, this.randomize, this.rotate, this.players);
+                this.placeDelay, this.breakDelay, this.randomize, this.rotate, this.players, this.shotKey, this.auto, this.dig,
+                this.render, this.obsidianColor, this.crystalColor);
+        this.obsidianColor.visibleIf(this.render::value);
+        this.crystalColor.visibleIf(this.render::value);
     }
 
     public static CrystalAura instance() {
@@ -88,8 +121,25 @@ public final class CrystalAura extends Module {
     }
 
     @Override
+    public void onClientTick() {
+        boolean down = this.shotKey.isDown();
+        if (down && !this.keyWas && mc().gui.screen() == null) {
+            this.shotRequested = true;
+        }
+        this.keyWas = down;
+    }
+
+    @Override
+    protected void onDisable() {
+        this.phase = Phase.IDLE;
+        this.shotRequested = false;
+        stopDigging();
+    }
+
+    @Override
     protected void onEnable() {
         this.failed = false;
+        this.phase = Phase.IDLE;
         this.ticksSincePlace = 99;
         this.ticksSinceBreak = 99;
     }
@@ -132,22 +182,39 @@ public final class CrystalAura extends Module {
             return;
         }
         LivingEntity target = pickTarget(player);
+        if (this.shotRequested) {
+            this.shotRequested = false;
+            if (this.phase != Phase.IDLE) {
+                cancelShot(null);
+            } else if (target != null) {
+                startShot(player, target);
+            } else {
+                say("нет цели рядом");
+            }
+        }
         if (target == null) {
+            if (this.phase != Phase.IDLE) {
+                cancelShot("цель пропала");
+            }
+            return;
+        }
+        if (this.phase != Phase.IDLE) {
+            runShot(player, target);
+            return;
+        }
+        if (!this.auto.value()) {
             return;
         }
 
         // 1) break a crystal that hurts the enemy and is safe for us
         EndCrystal crystal = bestCrystal(player, target);
         if (crystal != null) {
+            this.espCrystal = crystal.getBoundingBox();
+            this.espAt = System.currentTimeMillis();
             if (this.ticksSinceBreak < this.breakDelay.value() + this.breakJitter) {
                 return;
             }
-            Vec3 aim = crystal.getBoundingBox().getCenter();
-            if (!rayHitsBox(player, crystal.getBoundingBox().inflate(0.02), breakReach())) {
-                turnTo(player, aim);
-                return;
-            }
-            if (Attack.hitEntity(crystal, InteractionHand.MAIN_HAND)) {
+            if (breakCrystal(player, crystal)) {
                 this.ticksSinceBreak = 0;
                 this.breakJitter = this.randomize.value() ? ThreadLocalRandom.current().nextInt(2) : 0;
             }
@@ -158,39 +225,399 @@ public final class CrystalAura extends Module {
         if (this.ticksSincePlace < this.placeDelay.value() + this.placeJitter) {
             return;
         }
-        InteractionHand hand = crystalHand(player);
-        int slot = hand == null ? hotbarCrystalSlot(player) : -1;
-        if (hand == null && slot < 0) {
-            return;
-        }
         Spot spot = bestSpot(player, target);
         if (spot == null) {
             return;
         }
-        BlockHitResult face = faceOf(player, spot.pos(), false);
-        if (face == null) {
+        if (placeCrystalAt(player, spot.pos())) {
+            this.ticksSincePlace = 0;
+            this.placeJitter = this.randomize.value() ? ThreadLocalRandom.current().nextInt(2) : 0;
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------------ single shot
+
+    private void say(String text) {
+        Minecraft mc = mc();
+        if (mc.player != null) {
+            mc.player.sendSystemMessage(Component.literal("§bCrystalAura: §f" + text));
+        }
+    }
+
+    private void cancelShot(String reason) {
+        this.phase = Phase.IDLE;
+        stopDigging();
+        if (reason != null) {
+            say(reason);
+        }
+    }
+
+    /**
+     * The key: with an obsidian base near the enemy it places one crystal and breaks it once; with no base it makes
+     * one (digs the block and puts obsidian into the hole, or just puts obsidian on the empty place).
+     */
+    private void startShot(LocalPlayer player, LivingEntity target) {
+        this.shotTicks = 0;
+        Spot spot = bestSpot(player, target);
+        if (spot != null) {
+            this.phase = Phase.CRYSTAL;
+            this.shotBase = spot.pos();
             return;
         }
-        BlockHitResult served = faceOf(player, spot.pos(), true);
+        if (!this.dig.value()) {
+            say("нет обсидиана рядом с целью");
+            return;
+        }
+        BlockPos base = bestPrepare(player, target);
+        if (base == null) {
+            say("нет места под обсидиан");
+            return;
+        }
+        this.phase = Phase.PREPARE;
+        this.shotBase = base;
+    }
+
+    private void runShot(LocalPlayer player, LivingEntity target) {
+        if (++this.shotTicks > 60) {
+            cancelShot("не получилось вовремя, отмена");
+            return;
+        }
+        if (this.phase == Phase.CRYSTAL) {
+            this.espBase = this.shotBase;
+            this.espAt = System.currentTimeMillis();
+            EndCrystal existing = crystalAt(this.shotBase);
+            if (existing != null) {
+                this.espCrystal = existing.getBoundingBox();
+                Vec3 center = existing.position();
+                if (!acceptable(player, damage(center, target), damage(center, player), target)) {
+                    cancelShot("кристалл невыгоден или опасен, отмена");
+                    return;
+                }
+                if (breakCrystal(player, existing)) {
+                    this.phase = Phase.IDLE;
+                }
+                return;
+            }
+            if (this.ticksSincePlace >= 2 || this.shotTicks == 1) {
+                if (placeCrystalAt(player, this.shotBase)) {
+                    this.ticksSincePlace = 0;
+                }
+            }
+            return;
+        }
+        // PREPARE: dig what is there, then obsidian
+        this.espObsidian = this.shotBase;
+        this.espAt = System.currentTimeMillis();
+        BlockState state = mc().level.getBlockState(this.shotBase);
+        if (state.is(Blocks.OBSIDIAN) || state.is(Blocks.BEDROCK)) {
+            stopDigging();
+            this.phase = Phase.IDLE;
+            say("обсидиан стоит, нажми ещё раз для взрыва");
+            return;
+        }
+        if (!state.isAir() && !state.canBeReplaced()) {
+            digBlock(player, this.shotBase);
+            return;
+        }
+        stopDigging();
+        placeObsidianAt(player, this.shotBase);
+    }
+
+    private EndCrystal crystalAt(BlockPos base) {
+        Vec3 center = new Vec3(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5);
+        for (Entity entity : mc().level.entitiesForRendering()) {
+            if (entity instanceof EndCrystal crystal && crystal.isAlive() && crystal.position().distanceToSqr(center) < 1.0) {
+                return crystal;
+            }
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------------------------------------ actions
+
+    /** Turns toward the crystal and breaks it when the server already knows the angle. True when the hit went out. */
+    private boolean breakCrystal(LocalPlayer player, EndCrystal crystal) {
+        if (!rayHitsBox(player, crystal.getBoundingBox().inflate(0.02), breakReach())) {
+            turnTo(player, crystal.getBoundingBox().getCenter());
+            return false;
+        }
+        return Attack.hitEntity(crystal, InteractionHand.MAIN_HAND);
+    }
+
+    /** Puts a crystal on the base: turns first, clicks when the angle is known to the server. */
+    private boolean placeCrystalAt(LocalPlayer player, BlockPos base) {
+        Minecraft mc = mc();
+        InteractionHand hand = crystalHand(player);
+        int slot = hand == null ? hotbarCrystalSlot(player) : -1;
+        if (hand == null && slot < 0) {
+            return false;
+        }
+        this.espBase = base;
+        this.espAt = System.currentTimeMillis();
+        BlockHitResult face = faceOf(player, base, false);
+        if (face == null) {
+            return false;
+        }
+        BlockHitResult served = faceOf(player, base, true);
         if (served == null) {
             turnTo(player, face.getLocation());
-            return;
+            return false;
         }
         if (hand == null) {
             hand = InteractionHand.MAIN_HAND;
         }
+        return useOn(player, hand, slot, served);
+    }
+
+    private boolean useOn(LocalPlayer player, InteractionHand hand, int slot, BlockHitResult hit) {
+        Minecraft mc = mc();
         int original = player.getInventory().getSelectedSlot();
         if (slot >= 0) {
             player.getInventory().setSelectedSlot(slot);
         }
-        InteractionResult result = mc.gameMode.useItemOn(player, hand, served);
+        InteractionResult result = mc.gameMode.useItemOn(player, hand, hit);
         if (slot >= 0) {
             player.getInventory().setSelectedSlot(original);
         }
         if (result.consumesAction()) {
             player.swing(hand);
-            this.ticksSincePlace = 0;
-            this.placeJitter = this.randomize.value() ? ThreadLocalRandom.current().nextInt(2) : 0;
+            return true;
+        }
+        return false;
+    }
+
+    private int hotbarSlotOf(LocalPlayer player, net.minecraft.world.item.Item item) {
+        for (int slot = 0; slot < 9; slot++) {
+            if (player.getInventory().getItem(slot).is(item)) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    /** Puts obsidian on the empty place, against a neighbouring block. */
+    private void placeObsidianAt(LocalPlayer player, BlockPos pos) {
+        int slot = hotbarSlotOf(player, Items.OBSIDIAN);
+        if (slot < 0) {
+            cancelShot("нет обсидиана в хотбаре");
+            return;
+        }
+        BlockHitResult aim = supportFace(player, pos, false);
+        if (aim == null) {
+            cancelShot("не к чему прислонить обсидиан");
+            return;
+        }
+        BlockHitResult served = supportFace(player, pos, true);
+        if (served == null) {
+            turnTo(player, aim.getLocation());
+            return;
+        }
+        useOn(player, InteractionHand.MAIN_HAND, slot, served);
+    }
+
+    /**
+     * A neighbour of the empty place to put the block against: the first one (below, then the sides, then above) whose
+     * face that looks at the place can be seen. {@code fromServerAngles}: along the angles the server knows.
+     */
+    private BlockHitResult supportFace(LocalPlayer player, BlockPos pos, boolean fromServerAngles) {
+        Minecraft mc = mc();
+        Vec3 eye = ServerView.eyePos(player);
+        Direction[] order = {Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST, Direction.UP};
+        for (Direction direction : order) {
+            BlockPos neighbour = pos.relative(direction);
+            BlockState state = mc.level.getBlockState(neighbour);
+            if (state.isAir() || state.canBeReplaced()) {
+                continue;
+            }
+            Direction clicked = direction.getOpposite();
+            Vec3 faceCenter = Vec3.atCenterOf(neighbour).relative(clicked, 0.5);
+            Vec3 end = fromServerAngles
+                    ? eye.add(look(ServerView.yaw(player.getYRot()), ServerView.pitch(player.getXRot())).scale(this.placeRange.value() + 0.5))
+                    : faceCenter;
+            BlockHitResult hit = mc.level.clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
+            if (hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(neighbour) && hit.getDirection() == clicked
+                    && hit.getLocation().distanceTo(eye) <= this.placeRange.value()) {
+                return hit;
+            }
+        }
+        return null;
+    }
+
+    /** Breaks a block the usual way: turn, start, keep the mining going with swings until it is gone. */
+    private void digBlock(LocalPlayer player, BlockPos pos) {
+        Minecraft mc = mc();
+        BlockHitResult aim = faceOf(player, pos, false);
+        if (aim == null) {
+            cancelShot("блок не виден или далеко, подкоп отменён");
+            return;
+        }
+        BlockHitResult served = faceOf(player, pos, true);
+        if (served == null) {
+            if (this.digging) {
+                stopDigging();
+            }
+            turnTo(player, aim.getLocation());
+            return;
+        }
+        if (!this.digging || !pos.equals(this.digPos)) {
+            this.digSlot = bestToolSlot(player, mc.level.getBlockState(pos));
+            this.digPos = pos;
+            if (this.digSlot >= 0 && this.digSlot != player.getInventory().getSelectedSlot()) {
+                this.savedSlot = player.getInventory().getSelectedSlot();
+                player.getInventory().setSelectedSlot(this.digSlot);
+            }
+            if (mc.gameMode.startDestroyBlock(pos, served.getDirection())) {
+                this.digging = true;
+            }
+        } else {
+            mc.gameMode.continueDestroyBlock(pos, served.getDirection());
+        }
+        player.swing(InteractionHand.MAIN_HAND);
+        // keep the head on the block for the movement packet of this tick as well
+        turnTo(player, aim.getLocation());
+    }
+
+    private int savedSlot = -1;
+
+    private void stopDigging() {
+        Minecraft mc = mc();
+        if (this.digging && mc.gameMode != null) {
+            mc.gameMode.stopDestroyBlock();
+        }
+        this.digging = false;
+        this.digPos = null;
+        if (this.savedSlot >= 0 && mc.player != null) {
+            mc.player.getInventory().setSelectedSlot(this.savedSlot);
+        }
+        this.savedSlot = -1;
+    }
+
+    private int bestToolSlot(LocalPlayer player, BlockState state) {
+        int best = -1;
+        float bestSpeed = 1.0f;
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = player.getInventory().getItem(slot);
+            float speed = stack.getDestroySpeed(state);
+            if (speed > bestSpeed) {
+                bestSpeed = speed;
+                best = slot;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Where to make a base when there is none: a block next to the enemy's feet (one level lower), empty or breakable,
+     * with room above for a crystal, from where the explosion hurts the enemy and is safe for us.
+     */
+    private BlockPos bestPrepare(LocalPlayer player, LivingEntity target) {
+        Minecraft mc = mc();
+        Vec3 eye = ServerView.eyePos(player);
+        BlockPos feet = target.blockPosition();
+        BlockPos best = null;
+        double bestScore = -1.0e9;
+        for (int dx = -3; dx <= 3; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                for (int dy = -2; dy <= -1; dy++) {
+                    BlockPos pos = feet.offset(dx, dy, dz);
+                    BlockState state = mc.level.getBlockState(pos);
+                    boolean empty = state.isAir() || state.canBeReplaced();
+                    if (state.is(Blocks.OBSIDIAN) || state.is(Blocks.BEDROCK)) {
+                        continue;
+                    }
+                    if (!empty) {
+                        float hardness = state.getDestroySpeed(mc.level, pos);
+                        if (hardness < 0.0f || !state.getFluidState().isEmpty()) {
+                            continue;
+                        }
+                    }
+                    if (!mc.level.getBlockState(pos.above()).isAir() || !mc.level.getBlockState(pos.above(2)).isAir()) {
+                        continue;
+                    }
+                    Vec3 center = new Vec3(pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5);
+                    if (center.distanceTo(eye) > this.placeRange.value() || center.distanceTo(target.position()) > 8.0) {
+                        continue;
+                    }
+                    AABB space = new AABB(pos.getX(), pos.getY() + 1.0, pos.getZ(), pos.getX() + 1.0, pos.getY() + 3.0, pos.getZ() + 1.0);
+                    if (target.getBoundingBox().intersects(space) || player.getBoundingBox().intersects(space)) {
+                        continue;
+                    }
+                    if (rawDamage(center, target) < 1.0) {
+                        continue;
+                    }
+                    if (empty ? supportFace(player, pos, false) == null : faceOf(player, pos, false) == null) {
+                        continue;
+                    }
+                    double enemy = damage(center, target);
+                    double mine = damage(center, player);
+                    if (!acceptable(player, enemy, mine, target)) {
+                        continue;
+                    }
+                    double score = enemy - mine * 0.8 - (empty ? -0.5 : 2.0);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        best = pos;
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    // ------------------------------------------------------------------------------------------------ highlight
+
+    /** HUD element: boxes over the obsidian / dig place and the crystal (HatekClient). */
+    public void renderEsp(GuiGraphicsExtractor gg, DeltaTracker delta) {
+        Minecraft mc = mc();
+        if (!isEnabled() || !this.render.value() || mc.player == null || mc.level == null
+                || !dev.hatek.client.render.WorldProjection.isValid()
+                || System.currentTimeMillis() - this.espAt > 600L) {
+            return;
+        }
+        dev.hatek.client.ui.render.Render2D.begin(gg);
+        try {
+            int obsidian = this.obsidianColor.value();
+            int crystal = this.crystalColor.value();
+            if (this.espObsidian != null && this.phase == Phase.PREPARE) {
+                box(gg, new AABB(this.espObsidian), obsidian, 0.16f);
+                box(gg, new AABB(this.espObsidian.above()).deflate(0.2, 0.0, 0.2), crystal, 0.06f);
+            }
+            if (this.espBase != null) {
+                BlockPos base = this.espBase;
+                box(gg, new AABB(base), obsidian, 0.10f);
+                box(gg, new AABB(base.getX() + 0.15, base.getY() + 1.0, base.getZ() + 0.15,
+                        base.getX() + 0.85, base.getY() + 1.9, base.getZ() + 0.85), crystal, 0.14f);
+            }
+            if (this.espCrystal != null) {
+                box(gg, this.espCrystal.deflate(0.3), crystal, 0.2f);
+            }
+        } finally {
+            dev.hatek.client.ui.render.Render2D.end(gg);
+        }
+    }
+
+    private static void box(GuiGraphicsExtractor gg, AABB b, int argb, float fill) {
+        Vec3[] c = {
+                new Vec3(b.minX, b.minY, b.minZ), new Vec3(b.maxX, b.minY, b.minZ), new Vec3(b.maxX, b.minY, b.maxZ), new Vec3(b.minX, b.minY, b.maxZ),
+                new Vec3(b.minX, b.maxY, b.minZ), new Vec3(b.maxX, b.maxY, b.minZ), new Vec3(b.maxX, b.maxY, b.maxZ), new Vec3(b.minX, b.maxY, b.maxZ)};
+        float[][] p = new float[8][];
+        for (int i = 0; i < 8; i++) {
+            p[i] = dev.hatek.client.render.WorldProjection.toScreen(c[i]);
+            if (p[i] == null) {
+                return;
+            }
+        }
+        int line = (argb & 0x00FFFFFF) | 0xFF000000;
+        int face = dev.hatek.client.ui.render.Render2D.withAlpha(line, fill);
+        float th = Math.max(1.0f, 1.2f * dev.hatek.client.ui.render.Render2D.guiScale());
+        int[][] faces = {{0, 1, 2, 3}, {4, 5, 6, 7}, {0, 1, 5, 4}, {1, 2, 6, 5}, {2, 3, 7, 6}, {3, 0, 4, 7}};
+        for (int[] f : faces) {
+            dev.hatek.client.ui.render.Draw.triangle(gg, p[f[0]][0], p[f[0]][1], p[f[1]][0], p[f[1]][1], p[f[2]][0], p[f[2]][1], face);
+            dev.hatek.client.ui.render.Draw.triangle(gg, p[f[0]][0], p[f[0]][1], p[f[2]][0], p[f[2]][1], p[f[3]][0], p[f[3]][1], face);
+        }
+        int[][] edges = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6}, {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+        for (int[] e : edges) {
+            dev.hatek.client.ui.render.Draw.line(gg, p[e[0]][0], p[e[0]][1], p[e[1]][0], p[e[1]][1], th, line);
         }
     }
 
