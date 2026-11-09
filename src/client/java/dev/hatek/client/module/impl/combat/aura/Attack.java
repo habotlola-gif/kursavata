@@ -493,6 +493,25 @@ public final class Attack {
         return PACE.manualRefused(mc.player.tickCount);
     }
 
+    /** A hit on any entity (an end crystal) that is not the aura's own: marks the tick and swings. */
+    public static boolean hitEntity(net.minecraft.world.entity.Entity entity, InteractionHand hand) {
+        Minecraft mc = mc();
+        if (entity == null || mc.gameMode == null || mc.player == null) {
+            return false;
+        }
+        freeStrike = true;
+        try {
+            mc.gameMode.attack(mc.player, entity);
+        } finally {
+            freeStrike = false;
+        }
+        lastAttackPlayerTick = mc.player.tickCount;
+        if (hand != null) {
+            mc.player.swing(hand);
+        }
+        return true;
+    }
+
     public static boolean allowAttack() {
         Minecraft mc = mc();
         if (mc.player == null) {
