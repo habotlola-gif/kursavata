@@ -81,6 +81,16 @@ public class HatekClient implements ClientModInitializer {
                 });
 
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
+                Identifier.fromNamespaceAndPath(MOD_ID, "hit_counter"),
+                (graphics, delta) -> {
+                    dev.hatek.client.module.impl.render.HitCounter counter =
+                            dev.hatek.client.module.impl.render.HitCounter.instance();
+                    if (counter != null) {
+                        counter.render(graphics, delta);
+                    }
+                });
+
+        HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
                 Identifier.fromNamespaceAndPath(MOD_ID, "particles"),
                 (graphics, delta) -> {
                     dev.hatek.client.module.impl.render.Particles particles =

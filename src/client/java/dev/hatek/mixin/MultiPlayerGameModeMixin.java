@@ -23,5 +23,6 @@ public class MultiPlayerGameModeMixin {
             return;
         }
         dev.hatek.client.render.TargetTracker.onAttack(target);
+        dev.hatek.client.module.impl.render.HitCounter.onAttack(target);
     }
 }
