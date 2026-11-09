@@ -8,6 +8,7 @@ import dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
 import dev.hatek.client.module.impl.combat.aura.rotation.HelixRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.NeuralRotation;
+import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
 import dev.hatek.client.module.impl.combat.aura.rotation.SmoothRotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
@@ -383,12 +384,13 @@ public final class AttackAura extends Module {
         mc.player.setSprinting(true);
     }
 
+    /**
+     * Manual stop/start sprint packets around a hit are never sent: Grim (PacketOrderF, BadPacketsX) flags a sprint
+     * action that comes before an attack in the same tick and a stop + start pair without a movement packet between
+     * them. The sprint is dropped the way the game itself does it, through the sprint key, one tick ahead.
+     */
     private boolean packetSprint() {
-        Minecraft mc = mc();
-        return mc.player != null
-                && !mc.player.hasEffect(MobEffects.BLINDNESS)
-                && !mc.player.isPassenger()
-                && !extra(LEGIT_SPRINT);
+        return false;
     }
 
     public static boolean spaceTime() {
@@ -502,9 +504,7 @@ public final class AttackAura extends Module {
         float[] ranges = new float[]{base[0], base[1], base[0] + base[1]};
 
         boolean fresh = newCore();
-        // the new core always tells the server to stop sprinting right before the hit (a sprinting hit cannot crit)
-        // and starts it again after it; the classic core follows the Legit Sprint setting
-        boolean canPacket = fresh || packetSprint();
+        boolean canPacket = false;
 
         if (fresh) {
             if (!newCoreReady(mc)) {
@@ -557,7 +557,7 @@ public final class AttackAura extends Module {
             mc.gameMode.releaseUsingItem(mc.player);
         }
 
-        if (!canPacket) {
+        if (!fresh || this.noSprintHit) {
             mc.player.setSprinting(false);
             mc.options.keySprint.setDown(false);
         }
@@ -595,7 +595,11 @@ public final class AttackAura extends Module {
         return 12;
     }
 
+    private boolean noSprintHit;
+    private int sprintWaitTicks;
+
     private boolean newCoreReady(Minecraft mc) {
+        this.noSprintHit = false;
         if (mc.player.tickCount == this.lastStrikeTick) {
             return false;
         }
@@ -672,7 +676,19 @@ public final class AttackAura extends Module {
                     return false;
                 }
             }
+            // the hit can be a crit: the server must already know that the sprint is off (the stop packet goes out
+            // with the movement packet at the end of a tick, so after a drop the hit waits one tick)
+            if (inAir && falling) {
+                this.noSprintHit = true;
+                if ((ServerView.serverSprinting(mc.player) || mc.player.isSprinting()) && this.sprintWaitTicks < 4) {
+                    this.sprintWaitTicks++;
+                    holdSprint();
+                    why("сбрасывает спринт перед критом: сервер ещё считает, что бежим");
+                    return false;
+                }
+            }
         }
+        this.sprintWaitTicks = 0;
         return true;
     }
 
