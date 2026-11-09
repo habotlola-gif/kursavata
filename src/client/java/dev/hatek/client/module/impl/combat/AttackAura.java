@@ -541,6 +541,11 @@ public final class AttackAura extends Module {
         if (target == null) {
             return;
         }
+        // no hit in the middle of an item swap / use (slot change + attack in one tick is a bad order for the anticheat)
+        if (ClickAction.busy() || OffhandSwapper.acting()) {
+            why("идёт обмен / использование предмета (FTHelper / AutoSwap), удар ждёт");
+            return;
+        }
         if (AuraUtil.getStrictDistance(target) >= attackRange()) {
             why(String.format(java.util.Locale.ROOT, "цель далеко для удара: %.2f >= %.2f", AuraUtil.getStrictDistance(target), attackRange()));
             return;

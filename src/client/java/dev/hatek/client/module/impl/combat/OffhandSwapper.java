@@ -33,6 +33,7 @@ public final class OffhandSwapper {
     private int pauseTicks;
     private int tickNumber;
     private int readyAtTick;
+    private int sentTick = Integer.MIN_VALUE / 2;
     private boolean pauseArmed;
     private boolean pauseThroughTick;
     private ItemStack expectedOffhand = ItemStack.EMPTY;
@@ -43,6 +44,11 @@ public final class OffhandSwapper {
 
     public static boolean busy() {
         return I.stage != 0;
+    }
+
+    /** True while the swap is being prepared or its packets were sent a moment ago (nothing else may act then). */
+    public static boolean acting() {
+        return I.stage == 1 || (I.stage == 2 && I.tickNumber - I.sentTick <= 1);
     }
 
     /** True while the player must stand still (inventory click path). */
@@ -191,6 +197,7 @@ public final class OffhandSwapper {
         if (!this.quiet) {
             message("§aМеняю: " + this.expectedOffhand.getHoverName().getString() + (viaHotbar ? " (хотбар)" : " (клик)"));
         }
+        this.sentTick = this.tickNumber;
         this.readyAtTick = this.tickNumber + Math.max(2, Math.min(30, (latencyMs(client, player) + 49) / 50 + 2));
         this.stage = 2;
         this.pauseArmed = false;

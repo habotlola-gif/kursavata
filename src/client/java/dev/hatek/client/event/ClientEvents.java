@@ -26,6 +26,10 @@ public final class ClientEvents {
         }
         dev.hatek.client.module.impl.combat.OffhandSwapper.beforePlayerTick(mc.player);
         dev.hatek.client.module.impl.combat.ClickAction.beforePlayerTick(mc.player);
+        // the item engines send their packets here, before this tick's movement packet, like a real key press does;
+        // at the end of the client tick they went out after the movement packet ("Post" for the anticheat)
+        dev.hatek.client.module.impl.combat.OffhandSwapper.tick();
+        dev.hatek.client.module.impl.combat.ClickAction.tick();
         dev.hatek.client.module.impl.movement.DragonFly dragonFly = dev.hatek.client.module.impl.movement.DragonFly.instance();
         if (dragonFly != null) {
             dragonFly.beforeTick(mc.player);

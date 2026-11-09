@@ -127,8 +127,7 @@ public class HatekClient implements ClientModInitializer {
         dev.hatek.client.feature.config.ConfigManager.tick();
         dev.hatek.client.module.impl.render.ClientSound.tickQueue();
         ModuleManager.tickAll();
-        dev.hatek.client.module.impl.combat.OffhandSwapper.tick();
-        dev.hatek.client.module.impl.combat.ClickAction.tick();
+        // the swap / click engines run at the start of LocalPlayer.tick (ClientEvents.playerTick), see there
 
         while (openClickGui.consumeClick()) {
             mc.gui.setScreen(new ClickGuiScreen());
