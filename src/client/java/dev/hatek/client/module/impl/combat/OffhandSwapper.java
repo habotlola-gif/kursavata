@@ -1,5 +1,6 @@
 package dev.hatek.client.module.impl.combat;
 
+import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -186,10 +187,18 @@ public final class OffhandSwapper {
         }
         if (viaHotbar) {
             int original = player.getInventory().getSelectedSlot();
-            net.send(new ServerboundSetCarriedItemPacket(this.source - 36));
+            int wantSlot = this.source - 36;
+            // a slot packet that repeats the slot the server already has is a "duplicate slot" packet (BadPacketsA):
+            // it is sent only when the slot really changes
+            int serverSlot = ServerView.serverSlot(player, original);
+            if (serverSlot != wantSlot) {
+                net.send(new ServerboundSetCarriedItemPacket(wantSlot));
+            }
             net.send(new ServerboundPlayerActionPacket(ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND,
                     BlockPos.ZERO, Direction.DOWN));
-            net.send(new ServerboundSetCarriedItemPacket(original));
+            if (ServerView.serverSlot(player, original) != original) {
+                net.send(new ServerboundSetCarriedItemPacket(original));
+            }
         } else {
             client.gameMode.handleContainerInput(player.inventoryMenu.containerId, this.source, 40,
                     ContainerInput.SWAP, (Player) player);

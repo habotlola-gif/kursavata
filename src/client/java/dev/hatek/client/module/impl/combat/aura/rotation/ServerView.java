@@ -3,6 +3,7 @@ package dev.hatek.client.module.impl.combat.aura.rotation;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
@@ -18,6 +19,9 @@ public class ServerView extends Component {
     // what the server was last told about sprinting (a duplicate start/stop is a "bad packet" for the anticheat)
     private static boolean sprintSent;
     private static Player sprintOwner;
+    // the slot of the last held-item packet (a repeat of the same slot is a "duplicate slot" packet), -1 = none yet
+    private static int heldSlot = -1;
+    private static Player heldOwner;
 
     public void onSend(Packet<?> packet) {
         if (packet instanceof ServerboundMovePlayerPacket move) {
@@ -29,6 +33,8 @@ public class ServerView extends Component {
             if (move.hasPosition()) {
                 position = new Vec3(move.getX(0.0), move.getY(0.0), move.getZ(0.0));
             }
+        } else if (packet instanceof ServerboundSetCarriedItemPacket slot) {
+            heldSlot = slot.getSlot();
         } else if (packet instanceof ServerboundPlayerCommandPacket command) {
             switch (command.getAction()) {
                 case START_SPRINTING -> sprintSent = true;
@@ -41,6 +47,18 @@ public class ServerView extends Component {
             pitch = use.getXRot();
             lookKnown = true;
         }
+    }
+
+    /**
+     * The hotbar slot the server has selected: the last slot packet that was sent, or, when none was sent yet, the
+     * slot the player holds.
+     */
+    public static int serverSlot(Player player, int selected) {
+        if (player != heldOwner) {
+            heldOwner = player;
+            heldSlot = -1;
+        }
+        return heldSlot >= 0 ? heldSlot : selected;
     }
 
     /** True while the server believes the player is sprinting (by the packets that were really sent). */
