@@ -55,6 +55,7 @@ public final class NameTags extends Module {
     private final BoolSetting throughWalls = new BoolSetting("Through walls", true);
     private final ModeSetting style = new ModeSetting("Style", 0, "2D (fixed size)", "3D (shrinks with distance)");
     private final SliderSetting worldHeight = new SliderSetting("3D: card height (blocks)", 0.22, 0.1, 0.6, 0.01);
+    private final SliderSetting distanceEffect = new SliderSetting("3D: distance effect (%, 0 = one size)", 50.0, 0.0, 100.0, 5.0);
     private final SliderSetting scale = new SliderSetting("Scale (%)", 100.0, 40.0, 200.0, 5.0);
     private final SliderSetting range = new SliderSetting("Range (blocks)", 128.0, 16.0, 256.0, 8.0);
 
@@ -82,8 +83,9 @@ public final class NameTags extends Module {
     public NameTags() {
         super("NameTags", "Name cards with face, rank and nick above players", Category.RENDER);
         instance = this;
-        with(this.items, this.info, this.privilege, this.throughWalls, this.style, this.worldHeight, this.scale, this.range);
+        with(this.items, this.info, this.privilege, this.throughWalls, this.style, this.worldHeight, this.distanceEffect, this.scale, this.range);
         this.worldHeight.visibleIf(() -> this.style.value().startsWith("3D"));
+        this.distanceEffect.visibleIf(() -> this.style.value().startsWith("3D"));
     }
 
     public static NameTags instance() {
@@ -132,13 +134,26 @@ public final class NameTags extends Module {
         // in the 3D style the whole card is laid out at its real size (fonts are made at that size, not stretched),
         // so the text stays sharp; the size never goes below what a font of 8 px can still show
         float minFactor = 8.0f / (15.0f * s);
+        long now = System.nanoTime();
+        float dt = this.lastFrame == 0L ? 0.016f : Math.min(0.1f, (now - this.lastFrame) / 1.0E9f);
+        this.lastFrame = now;
+        float follow = 1.0f - (float) Math.exp(-dt * 9.0f);
+        double strength = this.distanceEffect.value() / 100.0;
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
         Render2D.begin(gg);
         try {
             for (Tag tag : tags) {
                 float ts = s;
                 if (world) {
-                    float factor = (float) Math.max(minFactor, Math.min(3.5,
-                            pixelsPerBlock * this.worldHeight.value() / Math.max(0.5, tag.distance()) / (40.0 * s)));
+                    // the perspective size, softened by the distance effect (0 = one size, 100 = real perspective) and
+                    // eased over time, so the card does not jump when somebody comes closer
+                    double perspective = pixelsPerBlock * this.worldHeight.value() / Math.max(0.5, tag.distance()) / (40.0 * s);
+                    float target = (float) Math.max(minFactor, Math.min(3.5, Math.pow(Math.max(0.01, perspective), strength)));
+                    int id = tag.player().getId();
+                    Float previous = this.smoothFactor.get(id);
+                    float factor = previous == null ? target : previous + (target - previous) * follow;
+                    this.smoothFactor.put(id, factor);
+                    seen.add(id);
                     ts = s * factor;
                 }
                 draw(gg, tag, ts);
@@ -146,7 +161,11 @@ public final class NameTags extends Module {
         } finally {
             Render2D.end(gg);
         }
+        this.smoothFactor.keySet().retainAll(seen);
     }
+
+    private final java.util.Map<Integer, Float> smoothFactor = new java.util.HashMap<>();
+    private long lastFrame;
 
     private record Segment(String text, int color) {}
 
@@ -208,20 +227,26 @@ public final class NameTags extends Module {
     }
 
     private void draw(GuiGraphicsExtractor gg, Tag tag, float s) {
-        HFont rankFont = Fonts.of(Fonts.INTER_BOLD, Math.max(8, Math.round(15.0f * s)));
-        HFont nickFont = Fonts.of(Fonts.INTER_SEMIBOLD, Math.max(8, Math.round(15.0f * s)));
-        HFont infoFont = Fonts.of(Fonts.INTER_SEMIBOLD, Math.max(8, Math.round(12.5f * s)));
+        int mainSize = Math.max(8, Math.round(15.0f * s));
+        int infoSize = Math.max(8, Math.round(12.5f * s));
+        HFont rankFont = Fonts.of(Fonts.INTER_BOLD, mainSize);
+        HFont nickFont = Fonts.of(Fonts.INTER_SEMIBOLD, mainSize);
+        HFont infoFont = Fonts.of(Fonts.INTER_SEMIBOLD, infoSize);
+        // the fonts come in whole pixel sizes: the widths are measured with the exact scale, so the card grows
+        // smoothly and does not step when the font size changes by a pixel
+        float mainRatio = 15.0f * s / mainSize;
+        float infoRatio = 12.5f * s / infoSize;
         String nick = tag.player().getGameProfile().name();
         Privilege.Info rank = this.privilege.value() ? Privilege.of(tag.player()) : null;
         List<Segment> info = infoOf(tag.player(), tag.distance());
 
-        float nickWidth = nickFont.width(nick);
-        float rankWidth = rank != null ? rankFont.width(rank.text()) : 0.0f;
+        float nickWidth = nickFont.width(nick) * mainRatio;
+        float rankWidth = rank != null ? rankFont.width(rank.text()) * mainRatio : 0.0f;
         float rowOne = rankWidth + (rank != null ? 10.0f * s : 0.0f) + nickWidth;
         float gap = 9.0f * s;
         float rowTwo = 0.0f;
         for (int i = 0; i < info.size(); i++) {
-            rowTwo += infoFont.width(info.get(i).text()) + (i > 0 ? gap : 0.0f);
+            rowTwo += infoFont.width(info.get(i).text()) * infoRatio + (i > 0 ? gap : 0.0f);
         }
         boolean twoRows = !info.isEmpty();
         float width = (6.0f + 28.0f + 10.0f) * s + Math.max(rowOne, rowTwo) + 14.0f * s;
@@ -247,7 +272,8 @@ public final class NameTags extends Module {
             float infoBaseline = y + 37.0f * s;
             float ix = textX;
             for (Segment segment : info) {
-                ix = infoFont.draw(gg, segment.text(), ix, infoBaseline, segment.color()) + gap;
+                infoFont.draw(gg, segment.text(), ix, infoBaseline, segment.color());
+                ix += infoFont.width(segment.text()) * infoRatio + gap;
             }
         }
 
