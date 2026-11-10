@@ -74,28 +74,33 @@ void bloomMode(vec4 hand) {
     vec3 light = mix(ColorB.rgb, ColorA.rgb, band);
     float scale = max(ScreenSize.y / 1080.0, 1.0);
     if (hand.a > 0.01) {
-        // осветление «экраном»: светлое уходит в белое, тёмные детали (рукав, рукоять) остаются темнее
+        // the item is washed toward the light colour and overexposed: bright pixels go white, the texture still
+        // shows through as a slightly darker pattern; the running band is the brightest part
         float lum = dot(hand.rgb, vec3(0.299, 0.587, 0.114));
-        float k = clamp(Fill * (0.45 + 0.7 * band) * (0.35 + 0.9 * lum), 0.0, 1.0);
-        vec3 lit = 1.0 - (1.0 - hand.rgb) * (1.0 - light * k);
-        lit = mix(lit, vec3(1.0), smoothstep(0.75, 1.0, lum * Fill * band) * 0.6);
-        fragColor = vec4(lit, hand.a);
+        vec3 lifted = mix(hand.rgb, light, clamp(Fill * 0.72, 0.0, 1.0));
+        vec3 lit = lifted + light * Fill * (0.32 + 0.75 * band) * (0.5 + 0.5 * lum);
+        // the glow bleeds over the edges of the item
+        float inner = 1.0 - coverageAround(texCoord, 5.0 * scale);
+        lit += light * inner * 0.35 * Fill;
+        fragColor = vec4(min(lit, vec3(1.0)), hand.a);
         return;
     }
-    // мягкое свечение вокруг, «дышит» вместе с полосой
-    float glow = pow(coverageAround(texCoord, GlowRadius * scale), 0.75) * (0.55 + 0.55 * band);
-    glow = clamp(glow * 1.15, 0.0, 1.0);
-    // мягкая тень под предметом: предмет над этой точкой затеняет её
+    // a wide soft halo with a brighter core near the item; it breathes with the band
+    float wide = coverageAround(texCoord, GlowRadius * 2.0 * scale);
+    float near = coverageAround(texCoord, GlowRadius * 0.7 * scale);
+    float glow = clamp(pow(wide, 0.85) * 2.3 + near * 0.9, 0.0, 1.0) * (0.6 + 0.45 * band);
+    glow = clamp(glow, 0.0, 1.0);
+    // soft shadow under the item: the item above this point darkens it
     float shade = 0.0;
     if (Shadow > 0.0) {
-        vec2 lift = vec2(-3.0, 9.0) * scale / ScreenSize;
-        shade = coverageAround(texCoord + lift, 10.0 * scale) * Shadow * 0.75;
+        vec2 lift = vec2(-4.0, 12.0) * scale / ScreenSize;
+        shade = coverageAround(texCoord + lift, 14.0 * scale) * Shadow * 0.8 * (1.0 - glow);
     }
     float alpha = glow + shade * (1.0 - glow);
     if (alpha <= 0.003) {
         discard;
     }
-    vec3 rgb = (mix(light, vec3(1.0), 0.25) * glow) / alpha;
+    vec3 rgb = (mix(light, vec3(1.0), 0.35) * glow) / alpha;
     fragColor = vec4(rgb, alpha);
 }
 
