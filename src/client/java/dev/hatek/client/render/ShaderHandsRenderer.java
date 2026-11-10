@@ -63,7 +63,7 @@ public final class ShaderHandsRenderer {
             .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
             .build();
     private static final int UBO_SIZE = new Std140SizeCalculator()
-            .putVec4().putVec4().putFloat().putFloat().putFloat().putInt().putFloat().putInt().get();
+            .putVec4().putVec4().putFloat().putFloat().putFloat().putInt().putFloat().putInt().putFloat().get();
     private static final int TRAIL_UBO_SIZE = new Std140SizeCalculator().putFloat().putFloat().putFloat().putFloat().get();
     private static final double PHASE_PER_SECOND = Math.PI / 4.0;
     private static final float TRAIL_LIFE = 0.42f;
@@ -143,7 +143,8 @@ public final class ShaderHandsRenderer {
                     .putFloat((float) phase)
                     .putInt(settings.modeIndex())
                     .putFloat(trailTarget != null ? settings.trailBrightness() : 0.0f)
-                    .putInt(settings.trailPaletteIndex());
+                    .putInt(settings.trailPaletteIndex())
+                    .putFloat(settings.shadow());
         }
         try (RenderPass pass = encoder.createRenderPass(() -> "hatek shader hands", main.getColorTextureView(), Optional.empty())) {
             pass.setPipeline(PIPELINE);

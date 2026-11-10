@@ -15,6 +15,7 @@ layout(std140) uniform HandsInfo {
     int Mode;          // 0 — заливка + свечение, 1 — только заливка, 2 — только свечение
     float Trail;       // яркость огненного шлейфа, 0 — выключен
     int TrailPalette;  // 0 — настоящий огонь, 1 — цвета рук
+    float Shadow;      // режим Bloom: сила мягкой тени под предметом, 0..1
 };
 
 // Жар шлейфа (см. hands_trail.fsh), красный канал: 0 — холодно, 1 — у самых рук.
@@ -44,8 +45,66 @@ vec3 flame(float heat, vec3 grad) {
     return mix(c, vec3(1.0), smoothstep(0.7, 1.0, heat) * 0.6);
 }
 
+// Режим Bloom: яркая полоса, которая бежит вдоль предмета (переливание), 0..1.
+float sweep(vec2 uv) {
+    float s = 0.5 + 0.5 * sin((uv.x * 1.3 - uv.y * 0.8) * 4.5 - Phase * 4.0);
+    return s * s * (3.0 - 2.0 * s);
+}
+
+// Доля предмета в кольцах вокруг точки (для свечения и тени).
+float coverageAround(vec2 uv, float radius) {
+    vec2 texel = 1.0 / ScreenSize;
+    float coverage = 0.0;
+    float total = 0.0;
+    for (int ring = 1; ring <= GLOW_RINGS; ring++) {
+        float dist = radius * float(ring) / float(GLOW_RINGS);
+        float weight = 1.0 - float(ring - 1) / float(GLOW_RINGS);
+        for (int i = 0; i < GLOW_DIRECTIONS; i++) {
+            float angle = TAU * (float(i) + 0.5 * float(ring)) / float(GLOW_DIRECTIONS);
+            vec2 offset = vec2(cos(angle), sin(angle)) * dist * texel;
+            coverage += step(0.01, texture(InSampler, uv + offset).a) * weight;
+            total += weight;
+        }
+    }
+    return coverage / total;
+}
+
+void bloomMode(vec4 hand) {
+    float band = sweep(texCoord);
+    vec3 light = mix(ColorB.rgb, ColorA.rgb, band);
+    float scale = max(ScreenSize.y / 1080.0, 1.0);
+    if (hand.a > 0.01) {
+        // осветление «экраном»: светлое уходит в белое, тёмные детали (рукав, рукоять) остаются темнее
+        float lum = dot(hand.rgb, vec3(0.299, 0.587, 0.114));
+        float k = clamp(Fill * (0.45 + 0.7 * band) * (0.35 + 0.9 * lum), 0.0, 1.0);
+        vec3 lit = 1.0 - (1.0 - hand.rgb) * (1.0 - light * k);
+        lit = mix(lit, vec3(1.0), smoothstep(0.75, 1.0, lum * Fill * band) * 0.6);
+        fragColor = vec4(lit, hand.a);
+        return;
+    }
+    // мягкое свечение вокруг, «дышит» вместе с полосой
+    float glow = pow(coverageAround(texCoord, GlowRadius * scale), 0.75) * (0.55 + 0.55 * band);
+    glow = clamp(glow * 1.15, 0.0, 1.0);
+    // мягкая тень под предметом: предмет над этой точкой затеняет её
+    float shade = 0.0;
+    if (Shadow > 0.0) {
+        vec2 lift = vec2(-3.0, 9.0) * scale / ScreenSize;
+        shade = coverageAround(texCoord + lift, 10.0 * scale) * Shadow * 0.75;
+    }
+    float alpha = glow + shade * (1.0 - glow);
+    if (alpha <= 0.003) {
+        discard;
+    }
+    vec3 rgb = (mix(light, vec3(1.0), 0.25) * glow) / alpha;
+    fragColor = vec4(rgb, alpha);
+}
+
 void main() {
     vec4 hand = texture(InSampler, texCoord);
+    if (Mode == 3) {
+        bloomMode(hand);
+        return;
+    }
     vec3 grad = gradient(texCoord);
 
     if (hand.a > 0.01) {
