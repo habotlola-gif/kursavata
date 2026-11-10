@@ -297,10 +297,10 @@ public final class ClassicEsp {
         float time = (now - epoch) / 1000.0f;
         float omega = TAU / p[1];
         float angle = -(p[0] / omega) * Mth.cos(omega * (time + p[2])) + p[5] * Mth.sin(time * 0.7f);
-        float pulse = Mth.sin(time * p[3] * TAU);
-        float size = P.markerSize * (1.0f + p[4] * pulse) * (1.0f + 0.25f * hurt);
+        // no pulsing: the size and the brightness stay steady (the marker only turns)
+        float size = P.markerSize * (1.0f + 0.25f * hurt);
         float half = pixels(center, size) * 0.8f;
-        int[] pal = palette(alpha * (0.85f + 0.15f * pulse));
+        int[] pal = palette(alpha);
         float rad = (float) Math.toRadians(angle);
 
         glow(screen[0], screen[1], half * 1.9f, mul(pal[0], 0.30f));

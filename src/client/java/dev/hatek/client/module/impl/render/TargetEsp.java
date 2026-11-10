@@ -7,6 +7,7 @@ import dev.hatek.client.module.setting.ColorSetting;
 import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.render.ClassicEsp;
+import dev.hatek.client.render.AspectEsp;
 import dev.hatek.client.render.CrystalsEsp;
 import dev.hatek.client.render.LightningEsp;
 import dev.hatek.client.render.SoulsEsp;
@@ -24,7 +25,7 @@ public final class TargetEsp extends Module {
     private static TargetEsp instance;
     private static final long START = System.nanoTime();
 
-    private final ModeSetting mode = new ModeSetting("Mode", 0, "Lightning", "Crystals", "Souls", ClassicEsp.MARKER, ClassicEsp.RING,
+    private final ModeSetting mode = new ModeSetting("Mode", 0, "Lightning", "Crystals", "Souls", "Aspect Souls", "Aspect Crystals", ClassicEsp.MARKER, ClassicEsp.RING,
             ClassicEsp.GHOSTS, ClassicEsp.CONSTELLATION, ClassicEsp.BLOOM, ClassicEsp.SWORDS, ClassicEsp.TEST);
     private final ColorSetting color = new ColorSetting("Color", 0xFFFF4D8D);
     private final SliderSetting size = new SliderSetting("Size (%)", 100.0, 50.0, 200.0, 5.0);
@@ -75,7 +76,7 @@ public final class TargetEsp extends Module {
         this.souls.visibleIf(() -> this.mode.is("Souls"));
         this.trail.visibleIf(() -> this.mode.is("Souls"));
         for (dev.hatek.client.module.setting.Setting setting : java.util.List.of(this.color2, this.hitFlash)) {
-            setting.visibleIf(() -> ClassicEsp.isClassic(this.mode.value()));
+            setting.visibleIf(() -> ClassicEsp.isClassic(this.mode.value()) || this.mode.value().startsWith("Aspect"));
         }
         this.markerSkin.visibleIf(() -> this.mode.is(ClassicEsp.MARKER));
         this.markerSize.visibleIf(() -> this.mode.is(ClassicEsp.MARKER));
@@ -134,6 +135,12 @@ public final class TargetEsp extends Module {
                 SoulsEsp.render(gg, this.shown, base, time, this.color.value(), (int) Math.round(this.souls.value()),
                         (float) this.size.value() / 100.0f, (float) this.thickness.value() / 100.0f,
                         (float) this.trail.value() / 100.0f, (float) this.glow.value() / 100.0f, visible ? 1.0f : 0.45f);
+            } else if (this.mode.is("Aspect Souls")) {
+                AspectEsp.souls(gg, this.shown, base, this.color.value(), (float) this.glow.value() / 100.0f,
+                        this.alpha, this.hitFlash.value());
+            } else if (this.mode.is("Aspect Crystals")) {
+                AspectEsp.crystals(gg, this.shown, base, this.color.value(), (float) this.glow.value() / 100.0f,
+                        this.alpha, this.hitFlash.value(), (now - START) / 1.0e9 * this.speed.value());
             } else if (ClassicEsp.isClassic(this.mode.value())) {
                 if (this.lastClassicTarget != this.shown) {
                     this.lastClassicTarget = this.shown;
