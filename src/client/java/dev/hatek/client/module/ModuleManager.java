@@ -102,6 +102,8 @@ public final class ModuleManager {
 
         MODULES.add(new dev.hatek.client.module.impl.combat.CrystalAura());
 
+        MODULES.add(new dev.hatek.client.module.impl.combat.AspectAura());
+
         MODULES.add(new NameTags());
 
         MODULES.add(new Removals());

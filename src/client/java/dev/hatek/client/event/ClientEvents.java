@@ -48,6 +48,7 @@ public final class ClientEvents {
             aura.onTick();
         }
 
+        dev.hatek.client.module.impl.combat.AspectAura.tick();
         dev.hatek.client.module.impl.combat.CrystalAura.tick();
 
         // the item engines send their packets here: still before this tick's movement packet (a real key press does
