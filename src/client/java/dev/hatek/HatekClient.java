@@ -81,16 +81,6 @@ public class HatekClient implements ClientModInitializer {
                 });
 
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
-                Identifier.fromNamespaceAndPath(MOD_ID, "crystal_aura"),
-                (graphics, delta) -> {
-                    dev.hatek.client.module.impl.combat.CrystalAura crystals =
-                            dev.hatek.client.module.impl.combat.CrystalAura.instance();
-                    if (crystals != null) {
-                        crystals.renderEsp(graphics, delta);
-                    }
-                });
-
-        HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
                 Identifier.fromNamespaceAndPath(MOD_ID, "hit_counter"),
                 (graphics, delta) -> {
                     dev.hatek.client.module.impl.render.HitCounter counter =
