@@ -48,7 +48,6 @@ public final class ClientEvents {
             aura.onTick();
         }
 
-        dev.hatek.client.module.impl.combat.AspectAura.tick();
 
         // the item engines send their packets here: still before this tick's movement packet (a real key press does
         // the same; at the end of the client tick they went out after it, which Grim reports as "Post"), and after
