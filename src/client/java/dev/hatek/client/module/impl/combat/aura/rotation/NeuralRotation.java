@@ -34,6 +34,14 @@ public final class NeuralRotation {
     private static float prevDPitch;
     private static float prevDYaw2;
     private static float prevDPitch2;
+    private static float prevDYaw3;
+    private static float prevDPitch3;
+    private static float prevDYaw4;
+    private static float prevDPitch4;
+    private static double prevErrYaw;
+    private static double prevErrPitch;
+    private static boolean prevErrValid;
+    private static int ticksSinceSwing = 40;
     private static int reactionTicks;
     private static double wanderU;
     private static double wanderV;
@@ -94,6 +102,8 @@ public final class NeuralRotation {
         prevDPitch = 0.0f;
         prevDYaw2 = 0.0f;
         prevDPitch2 = 0.0f;
+        prevDYaw3 = prevDPitch3 = prevDYaw4 = prevDPitch4 = 0.0f;
+        prevErrValid = false;
     }
 
     public static boolean aimed() {
@@ -126,6 +136,8 @@ public final class NeuralRotation {
         if (currentTarget != target) {
             currentTarget = target;
             prevDYaw = prevDPitch = prevDYaw2 = prevDPitch2 = 0.0f;
+            prevDYaw3 = prevDPitch3 = prevDYaw4 = prevDPitch4 = 0.0f;
+            prevErrValid = false;
             // a person notices a new target first: the head waits two to four ticks
             reactionTicks = 2 + rnd.nextInt(3);
             wanderLeft = 0;
@@ -157,13 +169,40 @@ public final class NeuralRotation {
         Vec3 rel = target.getDeltaMovement().subtract(player.getDeltaMovement());
         Vec3 self = player.getDeltaMovement();
         float cooldown = player.getAttackStrengthScale(0.0f);
-        double[] x = {
-                Mth.clamp(errYaw, -180.0, 180.0), Mth.clamp(errPitch, -90.0, 90.0), dist,
-                rel.x * fx + rel.z * fz, rel.x * fz - rel.z * fx, rel.y,
-                self.x * fx + self.z * fz, self.x * fz - self.z * fx,
-                Mth.clamp(prevDYaw, -60.0f, 60.0f), Mth.clamp(prevDPitch, -20.0f, 20.0f),
-                Mth.clamp(prevDYaw2, -60.0f, 60.0f), Mth.clamp(prevDPitch2, -20.0f, 20.0f),
-                cooldown, player.onGround() ? 1.0 : 0.0};
+        double[] x;
+        if (network.features() >= 22) {
+            // v2 features: four turns of history, how fast the target moves on the screen, the size of the body on
+            // the screen and the time since the last swing (the same as tools/aim_train/train2.py)
+            ticksSinceSwing = player.swinging && player.swingTime == 0 ? 0 : Math.min(40, ticksSinceSwing + 1);
+            double errYawNow = Mth.clamp(errYaw, -180.0, 180.0);
+            double errPitchNow = Mth.clamp(errPitch, -90.0, 90.0);
+            double lastErrYaw = prevErrValid ? prevErrYaw : errYawNow;
+            double lastErrPitch = prevErrValid ? prevErrPitch : errPitchNow;
+            prevErrYaw = errYawNow;
+            prevErrPitch = errPitchNow;
+            prevErrValid = true;
+            x = new double[]{
+                    errYawNow, errPitchNow, dist,
+                    rel.x * fx + rel.z * fz, rel.x * fz - rel.z * fx, rel.y,
+                    self.x * fx + self.z * fz, self.x * fz - self.z * fx,
+                    Mth.clamp(prevDYaw, -60.0f, 60.0f), Mth.clamp(prevDPitch, -20.0f, 20.0f),
+                    Mth.clamp(prevDYaw2, -60.0f, 60.0f), Mth.clamp(prevDPitch2, -20.0f, 20.0f),
+                    Mth.clamp(prevDYaw3, -60.0f, 60.0f), Mth.clamp(prevDPitch3, -20.0f, 20.0f),
+                    Mth.clamp(prevDYaw4, -60.0f, 60.0f), Mth.clamp(prevDPitch4, -20.0f, 20.0f),
+                    cooldown, player.onGround() ? 1.0 : 0.0,
+                    Math.toDegrees(Math.atan2(0.3, Math.max(dist, 0.3))),
+                    Mth.clamp(errYawNow - lastErrYaw + prevDYaw, -40.0, 40.0),
+                    Mth.clamp(errPitchNow - lastErrPitch + prevDPitch, -15.0, 15.0),
+                    ticksSinceSwing};
+        } else {
+            x = new double[]{
+                    Mth.clamp(errYaw, -180.0, 180.0), Mth.clamp(errPitch, -90.0, 90.0), dist,
+                    rel.x * fx + rel.z * fz, rel.x * fz - rel.z * fx, rel.y,
+                    self.x * fx + self.z * fz, self.x * fz - self.z * fx,
+                    Mth.clamp(prevDYaw, -60.0f, 60.0f), Mth.clamp(prevDPitch, -20.0f, 20.0f),
+                    Mth.clamp(prevDYaw2, -60.0f, 60.0f), Mth.clamp(prevDPitch2, -20.0f, 20.0f),
+                    cooldown, player.onGround() ? 1.0 : 0.0};
+        }
 
         // ---- the network's turn for this tick
         double[] step = network.sample(x, AttackAura.neuralChaos(), rnd);
@@ -201,6 +240,10 @@ public final class NeuralRotation {
         // what really happened (the angles are rounded to the mouse grid)
         float achievedYaw = Mth.wrapDegrees(player.getYRot() - yaw);
         float achievedPitch = player.getXRot() - pitch;
+        prevDYaw4 = prevDYaw3;
+        prevDPitch4 = prevDPitch3;
+        prevDYaw3 = prevDYaw2;
+        prevDPitch3 = prevDPitch2;
         prevDYaw2 = prevDYaw;
         prevDPitch2 = prevDPitch;
         prevDYaw = achievedYaw;
